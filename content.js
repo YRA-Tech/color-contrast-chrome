@@ -25,15 +25,15 @@
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'startSelection') {
-      document.addEventListener('mousedown', onMouseDown, true);
-      originalCursor = document.body.style.cursor;
+      
       document.body.style.cursor = 'crosshair';
+      document.addEventListener('mousedown', onMouseDown, true);
       sendResponse({ success: true });
     }
   });
 
   function onMouseDown(event) {
-    if (event.button !== 0) return; 
+    if (event.button !== 0) return;
     startX = event.clientX;
     startY = event.clientY;
     createSelectionBox();
@@ -50,20 +50,18 @@
   }
 
   function onMouseUp(event) {
+
     endX = event.clientX;
     endY = event.clientY;
     document.removeEventListener('mousemove', onMouseMove, true);
     document.removeEventListener('mouseup', onMouseUp, true);
 
+    if (selectionBox) {
+      document.body.removeChild(selectionBox);
+      selectionBox = null;
+    }
 
-
-    document.body.removeChild(selectionBox);
-    selectionBox = null;
-    document.removeEventListener('mousedown', onMouseDown, true);
-    console.log(" Up");
-    document.body.style.cursor = originalCursor;
-    event.preventDefault(); 
-
+    document.body.style.cursor = 'default';
 
     chrome.runtime.sendMessage({
       action: 'selectionMade',
@@ -73,9 +71,9 @@
         width: Math.abs(startX - endX),
         height: Math.abs(startY - endY)
       }
-      
     });
 
-    
+    document.removeEventListener('mousedown', onMouseDown, true);
+    event.preventDefault();
   }
 })();
