@@ -28,24 +28,25 @@
       document.addEventListener('mousedown', onMouseDown, true);
       originalCursor = document.body.style.cursor;
       document.body.style.cursor = 'crosshair';
+      sendResponse({ success: true });
     }
   });
 
   function onMouseDown(event) {
-    if (event.button !== 0) return; // Only respond to left clicks
+    if (event.button !== 0) return; 
     startX = event.clientX;
     startY = event.clientY;
     createSelectionBox();
     document.addEventListener('mousemove', onMouseMove, true);
     document.addEventListener('mouseup', onMouseUp, true);
-    event.preventDefault(); // Prevent text selection
+    event.preventDefault();
   }
 
   function onMouseMove(event) {
     endX = event.clientX;
     endY = event.clientY;
     updateSelectionBox();
-    event.preventDefault(); // Prevent text selection
+    event.preventDefault();
   }
 
   function onMouseUp(event) {
@@ -53,6 +54,16 @@
     endY = event.clientY;
     document.removeEventListener('mousemove', onMouseMove, true);
     document.removeEventListener('mouseup', onMouseUp, true);
+
+
+
+    document.body.removeChild(selectionBox);
+    selectionBox = null;
+    document.removeEventListener('mousedown', onMouseDown, true);
+    console.log(" Up");
+    document.body.style.cursor = originalCursor;
+    event.preventDefault(); 
+
 
     chrome.runtime.sendMessage({
       action: 'selectionMade',
@@ -62,12 +73,9 @@
         width: Math.abs(startX - endX),
         height: Math.abs(startY - endY)
       }
+      
     });
 
-    document.body.removeChild(selectionBox);
-    selectionBox = null;
-    document.removeEventListener('mousedown', onMouseDown, true);
-    document.body.style.cursor = originalCursor;
-    event.preventDefault(); // Prevent text selection
+    
   }
 })();
