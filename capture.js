@@ -1,5 +1,10 @@
 chrome.runtime.onMessage.addListener((message) => {
   if (message.image) {
-    document.getElementById('capturedImage').src = message.image;
+    const img = document.getElementById('capturedImage');
+    img.src = message.image;
+    img.onload = () => {
+      document.body.style.justifyContent = 'flex-start';
+      document.body.style.alignItems = 'flex-start';
+    };
   }
 });
