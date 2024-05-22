@@ -2,18 +2,38 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.image) {
     const img = document.getElementById('capturedImage');
     const canvas = document.getElementById('analysisCanvas');
-    const devicePixelRatio = message.devicePixelRatio || 1;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const devicePixelRatio = message.devicePixelRatio || 1;
 
     img.src = message.image;
     img.onload = () => {
-      canvas.width = img.width / devicePixelRatio;
-      canvas.height = img.height / devicePixelRatio;
+      const scaledWidth = img.width / devicePixelRatio;
+      const scaledHeight = img.height / devicePixelRatio;
+      canvas.width = scaledWidth;
+      canvas.height = scaledHeight;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
       // Run color contrast analysis after image is loaded
-      runColorContrastAnalysis(ctx, canvas.width, canvas.height);
+      runColorContrastAnalysis(ctx, scaledWidth, scaledHeight);
+
+      // Merge the image with the overlay
+      const mergedCanvas = document.createElement('canvas');
+      const mergedCtx = mergedCanvas.getContext('2d');
+      mergedCanvas.width = scaledWidth;
+      mergedCanvas.height = scaledHeight;
+      mergedCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+      mergedCtx.drawImage(canvas, 0, 0, scaledWidth, scaledHeight);
+
+      // Replace the canvas with the merged image
+      const mergedImageUrl = mergedCanvas.toDataURL('image/png');
+      const mergedImg = new Image();
+      mergedImg.src = mergedImageUrl;
+      mergedImg.onload = () => {
+        canvas.width = mergedImg.width;
+        canvas.height = mergedImg.height;
+        ctx.drawImage(mergedImg, 0, 0);
+      };
     };
   }
 });
