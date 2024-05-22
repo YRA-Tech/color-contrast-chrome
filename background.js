@@ -54,17 +54,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     });
   } else if (message.action === 'selectionMade') {
-    const { x, y, width, height } = message.area;
+    const { x, y, width, height, devicePixelRatio } = message.area;
 
     debouncedCaptureTab((dataUrl) => {
       fetch(dataUrl)
         .then(response => response.blob())
         .then(blob => createImageBitmap(blob))
         .then(imageBitmap => {
-          const offscreenCanvas = new OffscreenCanvas(width, height);
+          const offscreenCanvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
           const ctx = offscreenCanvas.getContext('2d');
-          ctx.drawImage(imageBitmap, x, y, width, height, 0, 0, width, height);
-          return offscreenCanvas.convertToBlob();
+          ctx.drawImage(imageBitmap, 0, 0);
+          const croppedImage = ctx.getImageData(x * devicePixelRatio, y * devicePixelRatio, width * devicePixelRatio, height * devicePixelRatio);
+          const croppedCanvas = new OffscreenCanvas(width, height);
+          const croppedCtx = croppedCanvas.getContext('2d');
+          croppedCtx.putImageData(croppedImage, 0, 0);
+          return croppedCanvas.convertToBlob();
         })
         .then(blob => {
           const reader = new FileReader();

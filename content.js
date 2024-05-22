@@ -16,8 +16,8 @@
     const y = Math.min(startY, endY);
     const width = Math.abs(startX - endX);
     const height = Math.abs(startY - endY);
-    selectionBox.style.left = `${x}px`;
-    selectionBox.style.top = `${y}px`;
+    selectionBox.style.left = `${x + window.scrollX}px`;
+    selectionBox.style.top = `${y + window.scrollY}px`;
     selectionBox.style.width = `${width}px`;
     selectionBox.style.height = `${height}px`;
   }
@@ -63,10 +63,11 @@
     chrome.runtime.sendMessage({
       action: 'selectionMade',
       area: {
-        x: Math.min(startX, endX),
-        y: Math.min(startY, endY),
+        x: Math.min(startX, endX) + window.scrollX,
+        y: Math.min(startY, endY) + window.scrollY,
         width: Math.abs(startX - endX),
-        height: Math.abs(startY - endY)
+        height: Math.abs(startY - endY),
+        devicePixelRatio: window.devicePixelRatio
       }
     });
 

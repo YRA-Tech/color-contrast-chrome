@@ -6,10 +6,11 @@ chrome.runtime.onMessage.addListener((message) => {
 
     img.src = message.image;
     img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
+      const devicePixelRatio = window.devicePixelRatio || 1;
+      canvas.width = img.width / devicePixelRatio;
+      canvas.height = img.height / devicePixelRatio;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       // Run color contrast analysis after image is loaded
       runColorContrastAnalysis(ctx, canvas.width, canvas.height);
@@ -32,7 +33,7 @@ document.getElementById('rescanButton').addEventListener('click', () => {
   const canvas = document.getElementById('analysisCanvas');
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(document.getElementById('capturedImage'), 0, 0);
+  ctx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width, canvas.height);
 
   // Run color contrast analysis with new parameters
   runColorContrastAnalysis(ctx, canvas.width, canvas.height);
@@ -66,7 +67,7 @@ function performAnalysis(data, width, height, contrastLevel, pixelRadius) {
       const r = data[index];
       const g = data[index + 1];
       const b = data[index + 2];
-      
+
       // Perform contrast check with neighboring pixels within the radius
       let contrast = false;
       for (let dy = -pixelRadius; dy <= pixelRadius; dy++) {
