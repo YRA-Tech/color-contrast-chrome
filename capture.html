@@ -3,11 +3,67 @@
 <head>
   <title>Screen Capture</title>
   <style>
-    body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f0f0; }
-    img { max-width: 100%; height: auto; }
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f0f0f0;
+      position: relative;
+    }
+    #toolbar {
+      position: absolute;
+      top: 0;
+      width: 100%;
+      background: #dae7f9;
+      display: flex;
+      justify-content: space-between;
+      padding: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+    }
+    #toolbar select, #toolbar button {
+      margin: 0 10px;
+    }
+    #analysisCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 50;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      position: relative;
+    }
   </style>
 </head>
 <body>
+  <div id="toolbar">
+    <button id="maskButton">Hide Mask</button>
+    <div>
+      <label for="levelEvaluated-options">WCAG Level Evaluated:</label>
+      <select id="levelEvaluated-options">
+        <option value="WCAG-aa-small">Level AA, Small Non-Bold Text (4.5:1)</option>
+        <option value="WCAG-aa-large">Level AA, Large Text (3:1)</option>
+        <option value="WCAG-aaa-small">Level AAA, Small Non-Bold Text (7:1)</option>
+        <option value="WCAG-aaa-large">Level AAA, Large Text (4.5:1)</option>
+      </select>
+    </div>
+    <div>
+      <label for="pixelRadius-options">Pixel Radius:</label>
+      <select id="pixelRadius-options">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+    </div>
+    <button id="rescanButton">Rescan</button>
+    <a href="#" id="downloadButton" class="button">Download</a>
+  </div>
+  <canvas id="analysisCanvas"></canvas>
   <img id="capturedImage" />
   <script src="capture.js"></script>
 </body>

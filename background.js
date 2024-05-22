@@ -1,4 +1,3 @@
-
 function debounce(func, wait) {
   let timeout;
   return function(...args) {
@@ -6,7 +5,6 @@ function debounce(func, wait) {
     timeout = setTimeout(() => func.apply(this, args), wait);
   };
 }
-
 
 function captureTab(callback) {
   chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
@@ -18,8 +16,7 @@ function captureTab(callback) {
   });
 }
 
-
-const debouncedCaptureTab = debounce(captureTab, 500); 
+const debouncedCaptureTab = debounce(captureTab, 500);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'captureFullScreen') {

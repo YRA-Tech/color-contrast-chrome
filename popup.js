@@ -5,6 +5,3 @@ document.getElementById('captureFull').addEventListener('click', () => {
 document.getElementById('captureArea').addEventListener('click', () => {
   chrome.runtime.sendMessage({ action: 'captureScreen' });
 });
-
-
-

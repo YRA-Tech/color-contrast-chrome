@@ -1,10 +1,153 @@
 chrome.runtime.onMessage.addListener((message) => {
   if (message.image) {
     const img = document.getElementById('capturedImage');
+    const canvas = document.getElementById('analysisCanvas');
+    const ctx = canvas.getContext('2d');
+
     img.src = message.image;
     img.onload = () => {
-      document.body.style.justifyContent = 'flex-start';
-      document.body.style.alignItems = 'flex-start';
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      // Run color contrast analysis after image is loaded
+      runColorContrastAnalysis(ctx, canvas.width, canvas.height);
     };
   }
 });
+
+document.getElementById('maskButton').addEventListener('click', () => {
+  const canvas = document.getElementById('analysisCanvas');
+  if (canvas.style.display === 'none') {
+    canvas.style.display = 'block';
+    document.getElementById('maskButton').innerText = 'Hide Mask';
+  } else {
+    canvas.style.display = 'none';
+    document.getElementById('maskButton').innerText = 'Show Mask';
+  }
+});
+
+document.getElementById('rescanButton').addEventListener('click', () => {
+  const canvas = document.getElementById('analysisCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(document.getElementById('capturedImage'), 0, 0);
+
+  // Run color contrast analysis with new parameters
+  runColorContrastAnalysis(ctx, canvas.width, canvas.height);
+});
+
+function runColorContrastAnalysis(ctx, width, height) {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  // Get selected WCAG level and pixel radius
+  const contrastLevel = document.getElementById('levelEvaluated-options').value;
+  const pixelRadius = parseInt(document.getElementById('pixelRadius-options').value, 10);
+
+  // Perform the color contrast analysis here using the evaluateColorContrast function
+  // and any other necessary functions
+  const results = performAnalysis(data, width, height, contrastLevel, pixelRadius);
+
+  // Apply greying effect
+  applyGreyingEffect(ctx, width, height);
+
+  // Display or use the results
+  updateCanvasWithResults(ctx, results, width, height);
+}
+
+function performAnalysis(data, width, height, contrastLevel, pixelRadius) {
+  const results = new Uint8Array(data.length);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = (y * width + x) * 4;
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+      
+      // Perform contrast check with neighboring pixels within the radius
+      let contrast = false;
+      for (let dy = -pixelRadius; dy <= pixelRadius; dy++) {
+        for (let dx = -pixelRadius; dx <= pixelRadius; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const nIndex = (ny * width + nx) * 4;
+            const nr = data[nIndex];
+            const ng = data[nIndex + 1];
+            const nb = data[nIndex + 2];
+            contrast = evaluateColorContrast(r, g, b, nr, ng, nb, contrastLevel);
+            if (contrast) break;
+          }
+        }
+        if (contrast) break;
+      }
+
+      if (contrast) {
+        results[index] = 255; // White for high contrast
+        results[index + 1] = 255;
+        results[index + 2] = 255;
+        results[index + 3] = 255;
+      } else {
+        results[index] = 0; // Transparent for low contrast
+        results[index + 1] = 0;
+        results[index + 2] = 0;
+        results[index + 3] = 128; // Semi-transparent to apply greying effect
+      }
+    }
+  }
+
+  return results;
+}
+
+function applyGreyingEffect(ctx, width, height) {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    // Apply a greying effect to the non-contrast areas
+    if (data[i + 3] === 128) {
+      data[i] = data[i] * 0.5;
+      data[i + 1] = data[i + 1] * 0.5;
+      data[i + 2] = data[i + 2] * 0.5;
+      data[i + 3] = 128; // Adjust alpha to be semi-transparent
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function updateCanvasWithResults(ctx, results, width, height) {
+  const imageData = ctx.createImageData(width, height);
+  imageData.data.set(results);
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function evaluateColorContrast(r1, g1, b1, r2, g2, b2, contrastLevel) {
+  const luminance = (r, g, b) => {
+    const a = [r, g, b].map((v) => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+  };
+
+  const L1 = luminance(r1, g1, b1) + 0.05;
+  const L2 = luminance(r2, g2, b2) + 0.05;
+  const ratio = L1 > L2 ? L1 / L2 : L2 / L1;
+
+  // Define contrast ratios based on selected WCAG level
+  let requiredRatio = 4.5; // Default AA small text
+  if (contrastLevel === 'WCAG-aa-large') {
+    requiredRatio = 3.0;
+  } else if (contrastLevel === 'WCAG-aaa-small') {
+    requiredRatio = 7.0;
+  } else if (contrastLevel === 'WCAG-aaa-large') {
+    requiredRatio = 4.5;
+  }
+
+  return ratio >= requiredRatio;
+}

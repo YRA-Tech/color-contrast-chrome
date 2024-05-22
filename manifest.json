@@ -1,35 +1,34 @@
 {
-    "manifest_version": 3,
-    "name": "Color Contrast Analyzer",
-    "version": "1.0",
-    "description": "Analyzes color contrast of web pages",
-    "permissions": [
-      "activeTab",
-      "scripting",
-      "tabs",
-      "tabCapture"
-    ],
-    "background": {
-      "service_worker": "background.js"
-    },
-    "action": {
-      "default_popup": "popup.html"
-    },
-    "content_scripts": [
-      {
-        "matches": ["<all_urls>"],
-        "js": ["content.js"],
-        "css": ["content.css"]
-      }
-    ],
-    "host_permissions": [
-      "<all_urls>"
-    ],
-    "web_accessible_resources": [
-      {
-        "resources": ["capture.html"],
-        "matches": ["<all_urls>"]
-      }
-    ]
-  }
-  
+  "manifest_version": 3,
+  "name": "Color Contrast Analyzer",
+  "version": "1.0",
+  "description": "Analyzes color contrast of web pages",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs",
+    "tabCapture"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["capture.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

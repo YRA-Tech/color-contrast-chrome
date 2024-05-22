@@ -1,7 +1,6 @@
 (() => {
   let startX, startY, endX, endY;
   let selectionBox = null;
-  let originalCursor;
 
   function createSelectionBox() {
     selectionBox = document.createElement('div');
@@ -25,7 +24,6 @@
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'startSelection') {
-      
       document.body.style.cursor = 'crosshair';
       document.addEventListener('mousedown', onMouseDown, true);
       sendResponse({ success: true });
@@ -50,7 +48,6 @@
   }
 
   function onMouseUp(event) {
-
     endX = event.clientX;
     endY = event.clientY;
     document.removeEventListener('mousemove', onMouseMove, true);
