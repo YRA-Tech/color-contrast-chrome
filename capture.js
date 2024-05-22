@@ -2,11 +2,11 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.image) {
     const img = document.getElementById('capturedImage');
     const canvas = document.getElementById('analysisCanvas');
-    const ctx = canvas.getContext('2d');
+    const devicePixelRatio = message.devicePixelRatio || 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     img.src = message.image;
     img.onload = () => {
-      const devicePixelRatio = window.devicePixelRatio || 1;
       canvas.width = img.width / devicePixelRatio;
       canvas.height = img.height / devicePixelRatio;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -31,7 +31,7 @@ document.getElementById('maskButton').addEventListener('click', () => {
 
 document.getElementById('rescanButton').addEventListener('click', () => {
   const canvas = document.getElementById('analysisCanvas');
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width, canvas.height);
 

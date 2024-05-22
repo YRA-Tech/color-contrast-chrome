@@ -24,7 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.tabs.create({ url: chrome.runtime.getURL('capture.html') }, (newTab) => {
         const listener = (tabId, changeInfo) => {
           if (tabId === newTab.id && changeInfo.status === 'complete') {
-            chrome.tabs.sendMessage(newTab.id, { image: dataUrl });
+            chrome.tabs.sendMessage(newTab.id, { image: dataUrl, devicePixelRatio: message.devicePixelRatio });
             chrome.tabs.onUpdated.removeListener(listener);
           }
         };
@@ -62,7 +62,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .then(blob => createImageBitmap(blob))
         .then(imageBitmap => {
           const offscreenCanvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
-          const ctx = offscreenCanvas.getContext('2d');
+          const ctx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
           ctx.drawImage(imageBitmap, 0, 0);
           const croppedImage = ctx.getImageData(x * devicePixelRatio, y * devicePixelRatio, width * devicePixelRatio, height * devicePixelRatio);
           const croppedCanvas = new OffscreenCanvas(width, height);
