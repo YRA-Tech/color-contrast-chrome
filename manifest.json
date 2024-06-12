@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Color Contrast Analyzer",
-  "version": "1.0",
+  "version": "2.0.0",
   "description": "Analyzes color contrast of web pages",
   "permissions": [
     "activeTab",
