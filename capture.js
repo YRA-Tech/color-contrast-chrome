@@ -12,11 +12,11 @@ chrome.runtime.onMessage.addListener((message) => {
       const visibleHeight = window.innerHeight;
 
       // Adjust the canvas size to exclude the scrollbar
-      const scaledWidth = visibleWidth * devicePixelRatio;
-      const scaledHeight = visibleHeight * devicePixelRatio;
+      const scaledWidth = visibleWidth * devicePixelRatio; // Scaled width considering device pixel ratio
+      const scaledHeight = visibleHeight * devicePixelRatio; // Scaled height considering device pixel ratio
 
-      canvas.width = visibleWidth;
-      canvas.height = visibleHeight;
+      canvas.width = visibleWidth; // Set canvas width to the visible width
+      canvas.height = visibleHeight; // Set canvas height to the visible height
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight, 0, 0, visibleWidth, visibleHeight);
@@ -27,8 +27,8 @@ chrome.runtime.onMessage.addListener((message) => {
       // Merge the image with the overlay
       const mergedCanvas = document.createElement('canvas');
       const mergedCtx = mergedCanvas.getContext('2d');
-      mergedCanvas.width = visibleWidth;
-      mergedCanvas.height = visibleHeight;
+      mergedCanvas.width = visibleWidth; // Set merged canvas width to the visible width
+      mergedCanvas.height = visibleHeight; // Set merged canvas height to the visible height
       mergedCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight, 0, 0, visibleWidth, visibleHeight);
       mergedCtx.drawImage(canvas, 0, 0, visibleWidth, visibleHeight);
 
@@ -37,8 +37,8 @@ chrome.runtime.onMessage.addListener((message) => {
       const mergedImg = new Image();
       mergedImg.src = mergedImageUrl;
       mergedImg.onload = () => {
-        canvas.width = mergedImg.width;
-        canvas.height = mergedImg.height;
+        canvas.width = mergedImg.width; // Set canvas width to merged image width
+        canvas.height = mergedImg.height; // Set canvas height to merged image height
         ctx.drawImage(mergedImg, 0, 0);
       };
     };
@@ -67,7 +67,7 @@ document.getElementById('rescanButton').addEventListener('click', () => {
 });
 
 function runColorContrastAnalysis(ctx, width, height) {
-  const imageData = ctx.getImageData(0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height); // Get image data for the entire canvas
   const data = imageData.data;
 
   // Get selected WCAG level and pixel radius
@@ -88,8 +88,8 @@ function runColorContrastAnalysis(ctx, width, height) {
 function performAnalysis(data, width, height, contrastLevel, pixelRadius) {
   const results = new Uint8Array(data.length);
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = 0; y < height; y++) { // Iterate over each pixel row
+    for (let x = 0; x < width; x++) { // Iterate over each pixel column
       const index = (y * width + x) * 4;
       const r = data[index];
       const g = data[index + 1];
@@ -97,12 +97,12 @@ function performAnalysis(data, width, height, contrastLevel, pixelRadius) {
 
       // Perform contrast check with neighboring pixels within the radius
       let contrast = false;
-      for (let dy = -pixelRadius; dy <= pixelRadius; dy++) {
-        for (let dx = -pixelRadius; dx <= pixelRadius; dx++) {
+      for (let dy = -pixelRadius; dy <= pixelRadius; dy++) { // Iterate over neighboring rows within radius
+        for (let dx = -pixelRadius; dx <= pixelRadius; dx++) { // Iterate over neighboring columns within radius
           if (dx === 0 && dy === 0) continue;
           const nx = x + dx;
           const ny = y + dy;
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) { // Ensure neighboring pixel is within bounds
             const nIndex = (ny * width + nx) * 4;
             const nr = data[nIndex];
             const ng = data[nIndex + 1];
@@ -132,26 +132,26 @@ function performAnalysis(data, width, height, contrastLevel, pixelRadius) {
 }
 
 function applyGreyingEffect(ctx, width, height) {
-  const imageData = ctx.getImageData(0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height); // Get image data for the entire canvas
   const data = imageData.data;
 
   for (let i = 0; i < data.length; i += 4) {
     // Apply a greying effect to the non-contrast areas
     if (data[i + 3] === 128) {
-      data[i] = data[i] * 0.5;
-      data[i + 1] = data[i + 1] * 0.5;
-      data[i + 2] = data[i + 2] * 0.5;
+      data[i] = data[i] * 0.5; // Reduce red channel
+      data[i + 1] = data[i + 1] * 0.5; // Reduce green channel
+      data[i + 2] = data[i + 2] * 0.5; // Reduce blue channel
       data[i + 3] = 128; // Adjust alpha to be semi-transparent
     }
   }
 
-  ctx.putImageData(imageData, 0, 0);
+  ctx.putImageData(imageData, 0, 0); // Put the modified image data back on the canvas
 }
 
 function updateCanvasWithResults(ctx, results, width, height) {
-  const imageData = ctx.createImageData(width, height);
-  imageData.data.set(results);
-  ctx.putImageData(imageData, 0, 0);
+  const imageData = ctx.createImageData(width, height); // Create a new image data object
+  imageData.data.set(results); // Set the results data
+  ctx.putImageData(imageData, 0, 0); // Put the results image data back on the canvas
 }
 
 function evaluateColorContrast(r1, g1, b1, r2, g2, b2, contrastLevel) {
