@@ -7,23 +7,30 @@ chrome.runtime.onMessage.addListener((message) => {
 
     img.src = message.image;
     img.onload = () => {
-      const scaledWidth = img.width / devicePixelRatio;
-      const scaledHeight = img.height / devicePixelRatio;
-      canvas.width = scaledWidth;
-      canvas.height = scaledHeight;
+      // Calculate the visible area excluding the scrollbar
+      const visibleWidth = window.innerWidth;
+      const visibleHeight = window.innerHeight;
+
+      // Adjust the canvas size to exclude the scrollbar
+      const scaledWidth = visibleWidth * devicePixelRatio;
+      const scaledHeight = visibleHeight * devicePixelRatio;
+
+      canvas.width = visibleWidth;
+      canvas.height = visibleHeight;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+      ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight, 0, 0, visibleWidth, visibleHeight);
 
       // Run color contrast analysis after image is loaded
-      runColorContrastAnalysis(ctx, scaledWidth, scaledHeight);
+      runColorContrastAnalysis(ctx, visibleWidth, visibleHeight);
 
       // Merge the image with the overlay
       const mergedCanvas = document.createElement('canvas');
       const mergedCtx = mergedCanvas.getContext('2d');
-      mergedCanvas.width = scaledWidth;
-      mergedCanvas.height = scaledHeight;
-      mergedCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
-      mergedCtx.drawImage(canvas, 0, 0, scaledWidth, scaledHeight);
+      mergedCanvas.width = visibleWidth;
+      mergedCanvas.height = visibleHeight;
+      mergedCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight, 0, 0, visibleWidth, visibleHeight);
+      mergedCtx.drawImage(canvas, 0, 0, visibleWidth, visibleHeight);
 
       // Replace the canvas with the merged image
       const mergedImageUrl = mergedCanvas.toDataURL('image/png');
