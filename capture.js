@@ -3,21 +3,21 @@ chrome.runtime.onMessage.addListener((message) => {
     const img = document.getElementById('capturedImage');
     const canvas = document.getElementById('analysisCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const devicePixelRatio = message.devicePixelRatio || 1;
+    const devicePixelRatio = message.devicePixelRatio || window.devicePixelRatio || 1;
 
     img.src = message.image;
     img.onload = () => {
       // Get the natural dimensions of the image
-      const imageWidth = img.naturalWidth;
-      const imageHeight = img.naturalHeight;
+      const imageWidth = img.naturalWidth / devicePixelRatio;
+      const imageHeight = img.naturalHeight / devicePixelRatio;
 
-      // Adjust the canvas size to match the image dimensions
-      canvas.width = imageWidth / devicePixelRatio;
-      canvas.height = imageHeight / devicePixelRatio;
+      // Adjust the canvas size to match the scaled image dimensions
+      canvas.width = imageWidth;
+      canvas.height = imageHeight;
 
       // Clear the canvas and draw the image on it
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, imageWidth, imageHeight);
 
       // Run color contrast analysis after the image is loaded
       runColorContrastAnalysis(ctx, canvas.width, canvas.height);
@@ -27,7 +27,7 @@ chrome.runtime.onMessage.addListener((message) => {
       const mergedCtx = mergedCanvas.getContext('2d');
       mergedCanvas.width = canvas.width;
       mergedCanvas.height = canvas.height;
-      mergedCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      mergedCtx.drawImage(img, 0, 0, imageWidth, imageHeight);
       mergedCtx.drawImage(canvas, 0, 0);
 
       // Replace the canvas with the merged image
@@ -57,8 +57,10 @@ document.getElementById('maskButton').addEventListener('click', () => {
 document.getElementById('rescanButton').addEventListener('click', () => {
   const canvas = document.getElementById('analysisCanvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const devicePixelRatio = window.devicePixelRatio || 1;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width / devicePixelRatio, canvas.height / devicePixelRatio);
 
   // Run color contrast analysis with new parameters
   runColorContrastAnalysis(ctx, canvas.width, canvas.height);
