@@ -16,12 +16,13 @@
 
   // Function to update the dimensions and position of the selection box based on the mouse coordinates
   function updateSelectionBox() {
-    const x = Math.min(startX , endX ); // Calculate the left position of the box
-    const y = Math.min(startY , endY ); // Calculate the top position of the box
+    const x = Math.min(startX, endX); // Calculate the left position of the box
+    const y = Math.min(startY, endY); // Calculate the top position of the box
     const width = Math.abs(startX - endX); // Calculate the width of the box
     const height = Math.abs(startY - endY); // Calculate the height of the box
     selectionBox.style.left = `${x + window.scrollX}px`; // Set the left position of the box, accounting for page scroll
-    selectionBox.style.top = `${y + window.scrollY}px`; // Set the top position of the box, accounting for page scroll
+    console.log("selectionBox.style.left", selectionBox.style.left);
+    selectionBox.style.top = `${y + window.scrollY*2}px`; // Set the top position of the box, accounting for page scroll
     selectionBox.style.width = `${width}px`; // Set the width of the box
     selectionBox.style.height = `${height}px`; // Set the height of the box
   }
@@ -38,9 +39,8 @@
   // Function to handle the mousedown event, initiating the selection
   function onMouseDown(event) {
     if (event.button !== 0) return; // Only proceed if the left mouse button is clicked
-    startX = event.clientX - window.scrollX; // Record the starting X coordinate
+    startX = event.clientX; // Record the starting X coordinate
     startY = event.clientY - window.scrollY; // Record the starting Y coordinate
-
     createSelectionBox(); // Create the selection box element
     document.addEventListener('mousemove', onMouseMove, true); // Add mousemove event listener to update the box
     document.addEventListener('mouseup', onMouseUp, true); // Add mouseup event listener to finish the selection
@@ -57,8 +57,8 @@
 
   // Function to handle the mouseup event, finalizing the selection
   function onMouseUp(event) {
-    endX = event.clientX - window.scrollX; // Update the end X coordinate
-    endY = event.clientY - window.scrollY; // Update the end Y coordinate
+    endX = event.clientX ; // Update the end X coordinate
+    endY = event.clientY ; // Update the end Y coordinate
     document.removeEventListener('mousemove', onMouseMove, true); // Remove the mousemove event listener
     document.removeEventListener('mouseup', onMouseUp, true); // Remove the mouseup event listener
 

@@ -65,7 +65,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const ctx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
           ctx.drawImage(imageBitmap, 0, 0);
           const croppedImage = ctx.getImageData(x * devicePixelRatio, y * devicePixelRatio, width * devicePixelRatio, height * devicePixelRatio);
-          const croppedCanvas = new OffscreenCanvas(width, height);
+          const croppedCanvas = new OffscreenCanvas(width * devicePixelRatio, height* devicePixelRatio);
           const croppedCtx = croppedCanvas.getContext('2d');
           croppedCtx.putImageData(croppedImage, 0, 0);
           return croppedCanvas.convertToBlob();
