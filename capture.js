@@ -7,22 +7,23 @@ chrome.runtime.onMessage.addListener((message) => {
 
     img.src = message.image;
     img.onload = () => {
-      // Get the natural dimensions of the image
-      const imageWidth = img.naturalWidth / devicePixelRatio;
-      const imageHeight = img.naturalHeight / devicePixelRatio;
+      let imageWidth, imageHeight;
+      if (message.mode === 'full') {
+        imageWidth = img.naturalWidth / devicePixelRatio;
+        imageHeight = img.naturalHeight / devicePixelRatio;
+      } else {
+        imageWidth = img.naturalWidth;
+        imageHeight = img.naturalHeight;
+      }
 
-      // Adjust the canvas size to match the scaled image dimensions
       canvas.width = imageWidth;
       canvas.height = imageHeight;
 
-      // Clear the canvas and draw the image on it
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, imageWidth, imageHeight);
 
-      // Run color contrast analysis after the image is loaded
       runColorContrastAnalysis(ctx, canvas.width, canvas.height);
 
-      // Merge the image with the overlay
       const mergedCanvas = document.createElement('canvas');
       const mergedCtx = mergedCanvas.getContext('2d');
       mergedCanvas.width = canvas.width;
@@ -30,7 +31,6 @@ chrome.runtime.onMessage.addListener((message) => {
       mergedCtx.drawImage(img, 0, 0, imageWidth, imageHeight);
       mergedCtx.drawImage(canvas, 0, 0);
 
-      // Replace the canvas with the merged image
       const mergedImageUrl = mergedCanvas.toDataURL('image/png');
       const mergedImg = new Image();
       mergedImg.src = mergedImageUrl;

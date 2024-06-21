@@ -24,7 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.tabs.create({ url: chrome.runtime.getURL('capture.html') }, (newTab) => {
         const listener = (tabId, changeInfo) => {
           if (tabId === newTab.id && changeInfo.status === 'complete') {
-            chrome.tabs.sendMessage(newTab.id, { image: dataUrl, devicePixelRatio: message.devicePixelRatio });
+            chrome.tabs.sendMessage(newTab.id, { image: dataUrl, devicePixelRatio: message.devicePixelRatio, mode: message.mode });
             chrome.tabs.onUpdated.removeListener(listener);
           }
         };
@@ -42,7 +42,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'startSelection' }, (response) => {
+        chrome.tabs.sendMessage(tabs[0].id, { action: 'startSelection', mode: message.mode }, (response) => {
           if (chrome.runtime.lastError) {
             console.error('Error sending message to tab:', chrome.runtime.lastError.message);
           } else if (response && response.error) {
@@ -54,7 +54,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     });
   } else if (message.action === 'selectionMade') {
-    const { x, y, width, height, devicePixelRatio } = message.area;
+    const { x, y, width, height, devicePixelRatio, mode } = message.area;
 
     debouncedCaptureTab((dataUrl) => {
       fetch(dataUrl)
@@ -77,7 +77,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.tabs.create({ url: chrome.runtime.getURL('capture.html') }, (newTab) => {
               const listener = (tabId, changeInfo) => {
                 if (tabId === newTab.id && changeInfo.status === 'complete') {
-                  chrome.tabs.sendMessage(newTab.id, { image: croppedDataUrl });
+                  chrome.tabs.sendMessage(newTab.id, { image: croppedDataUrl, mode: mode });
                   chrome.tabs.onUpdated.removeListener(listener);
                 }
               };
