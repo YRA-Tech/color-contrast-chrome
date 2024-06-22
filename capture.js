@@ -1,3 +1,4 @@
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message.image) {
     const img = document.getElementById('capturedImage');
@@ -15,7 +16,6 @@ chrome.runtime.onMessage.addListener((message) => {
         imageWidth = img.naturalWidth;
         imageHeight = img.naturalHeight;
       }
-
       canvas.width = imageWidth;
       canvas.height = imageHeight;
 
@@ -24,21 +24,8 @@ chrome.runtime.onMessage.addListener((message) => {
 
       runColorContrastAnalysis(ctx, canvas.width, canvas.height);
 
-      const mergedCanvas = document.createElement('canvas');
-      const mergedCtx = mergedCanvas.getContext('2d');
-      mergedCanvas.width = canvas.width;
-      mergedCanvas.height = canvas.height;
-      mergedCtx.drawImage(img, 0, 0, imageWidth, imageHeight);
-      mergedCtx.drawImage(canvas, 0, 0);
-
-      const mergedImageUrl = mergedCanvas.toDataURL('image/png');
-      const mergedImg = new Image();
-      mergedImg.src = mergedImageUrl;
-      mergedImg.onload = () => {
-        canvas.width = mergedImg.width;
-        canvas.height = mergedImg.height;
-        ctx.drawImage(mergedImg, 0, 0);
-      };
+      //alligning the contrast canvas with image
+      merged(canvas,ctx);
     };
   }
 });
@@ -60,10 +47,14 @@ document.getElementById('rescanButton').addEventListener('click', () => {
   const devicePixelRatio = window.devicePixelRatio || 1;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width / devicePixelRatio, canvas.height / devicePixelRatio);
+  ctx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width, canvas.height);
 
   // Run color contrast analysis with new parameters
   runColorContrastAnalysis(ctx, canvas.width, canvas.height);
+
+  //alligning the contrast canvas with image
+  merged(canvas,ctx);
+
 });
 
 function runColorContrastAnalysis(ctx, width, height) {
@@ -77,6 +68,24 @@ function runColorContrastAnalysis(ctx, width, height) {
 
   applyGreyingEffect(ctx, width, height);
   updateCanvasWithResults(ctx, results, width, height);
+}
+function merged(canvas,ctx)
+{
+  const mergedCanvas = document.createElement('canvas');
+  const mergedCtx = mergedCanvas.getContext('2d');
+  mergedCanvas.width = canvas.width;
+  mergedCanvas.height = canvas.height;
+  mergedCtx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width, canvas.height);
+  mergedCtx.drawImage(canvas, 0, 0);
+
+  const mergedImageUrl = mergedCanvas.toDataURL('image/png');
+  const mergedImg = new Image();
+  mergedImg.src = mergedImageUrl;
+  mergedImg.onload = () => {
+    canvas.width = mergedImg.width;
+    canvas.height = mergedImg.height;
+      ctx.drawImage(mergedImg, 0, 0);
+  };
 }
 
 function performAnalysis(data, width, height, contrastLevel, pixelRadius) {
