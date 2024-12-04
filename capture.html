@@ -1,74 +1,207 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Screen Capture</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background-color: #f0f0f0;
-      position: relative;
-    }
-    #toolbar {
-      position: absolute;
-      top: 0;
-      width: 100%;
-      background: #dae7f9;
-      display: flex;
-      justify-content: space-between;
-      padding: 10px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-      z-index: 100;
-    }
-    #toolbar select, #toolbar button {
-      margin: 0 10px;
-    }
-    #analysisCanvas {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 50;
-    }
-    img {
-      max-width: 100%;
-      height: auto;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-    }
-  </style>
+    <title>Color Contrast Analysis</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            padding: 16px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #0f0f0f;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            gap: 16px;
+            min-height: calc(100vh - 32px);
+        }
+
+        #toolbar {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 12px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 240px;
+            height: fit-content;
+            flex-shrink: 0;
+            position: sticky;
+            top: 16px;
+        }
+
+        .button {
+            padding: 6px 16px;
+            cursor: pointer;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 32px;
+            width: 100%;
+        }
+
+        .button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            opacity: 0.9;
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .select-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            width: 100%;
+            position: relative;
+        }
+
+        label {
+            font-size: 11px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select {
+            padding: 6px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            font-size: 12px;
+            background-color: rgba(255, 255, 255, 0.05);
+            color: white;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23fff' viewBox='0 0 16 16'%3E%3Cpath d='M8 10.5l-4-4h8l-4 4z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            padding-right: 28px;
+            height: 32px;
+            width: 100%;
+        }
+        
+        select option {
+            background-color: #1f1f1f;
+            color: white;
+            padding: 6px;
+            font-size: 12px;
+        }
+        select:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.3);
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+
+        select option:hover {
+            background-color: #2f2f2f;
+        }
+        .image-container {
+            position: relative;
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        #analysisCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            max-width: 100%;
+            z-index: 2;
+            border-radius: 12px;
+        }
+
+        #capturedImage {
+            max-width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+
+        #maskButton {
+            background: linear-gradient(45deg, #FF3B30, #FF2D55);
+        }
+
+        #rescanButton {
+            background: linear-gradient(45deg, #34C759, #30B954);
+        }
+
+        #downloadButton {
+            background: linear-gradient(45deg, #5856D6, #5E5CE6);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            #toolbar {
+                width: 100%;
+                flex-direction: row;
+                flex-wrap: wrap;
+                position: static;
+            }
+            
+            .select-group {
+                min-width: calc(50% - 8px);
+            }
+
+            .button {
+                min-width: calc(33.33% - 11px);
+            }
+        }
+    </style>
 </head>
 <body>
-  <div id="toolbar">
-    <button id="maskButton">Hide Mask</button>
-    <div>
-      <label for="levelEvaluated-options">WCAG Level Evaluated:</label>
-      <select id="levelEvaluated-options">
-        <option value="WCAG-aa-small">Level AA, Small Non-Bold Text (4.5:1)</option>
-        <option value="WCAG-aa-large">Level AA, Large Text (3:1)</option>
-        <option value="WCAG-aaa-small">Level AAA, Small Non-Bold Text (7:1)</option>
-        <option value="WCAG-aaa-large">Level AAA, Large Text (4.5:1)</option>
-      </select>
+    <div class="container">
+        <div id="toolbar">
+            <div class="select-group">
+                <label for="levelEvaluated-options">WCAG Level Evaluated</label>
+                <select id="levelEvaluated-options">
+                    <option value="WCAG-aa-small">Level AA, Small Non-Bold Text (4.5:1)</option>
+                    <option value="WCAG-aa-large">Level AA, Large Text (3:1)</option>
+                    <option value="WCAG-aaa-small">Level AAA, Small Non-Bold Text (7:1)</option>
+                    <option value="WCAG-aaa-large">Level AAA, Large Text (4.5:1)</option>
+                </select>
+            </div>
+
+            <div class="select-group">
+                <label for="pixelRadius-options">Pixel Radius</label>
+                <select id="pixelRadius-options">
+                    <option value="1">1 pixel</option>
+                    <option value="2">2 pixels</option>
+                    <option value="3">3 pixels</option>
+                </select>
+            </div>
+            <button id="maskButton" class="button">Hide Mask</button>
+            <button id="rescanButton" class="button">Rescan</button>
+            <button id="downloadButton" class="button">Download</button>
+        </div>
+
+        <div class="image-container">
+            <canvas id="analysisCanvas"></canvas>
+            <img id="capturedImage" alt="Captured content">
+        </div>
     </div>
-    <div>
-      <label for="pixelRadius-options">Pixel Radius:</label>
-      <select id="pixelRadius-options">
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3</option>
-      </select>
-    </div>
-    <button id="rescanButton">Rescan</button>
-    <a href="#" id="downloadButton" class="button">Download</a>
-  </div>
-  <canvas id="analysisCanvas"></canvas>
-  <img id="capturedImage" />
-  <script src="capture.js"></script>
+
+    <script src="capture.js"></script>
 </body>
 </html>

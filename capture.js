@@ -1,91 +1,257 @@
-
 chrome.runtime.onMessage.addListener((message) => {
   if (message.image) {
     const img = document.getElementById('capturedImage');
-    const canvas = document.getElementById('analysisCanvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const devicePixelRatio = message.devicePixelRatio || window.devicePixelRatio || 1;
+    const analysisCanvas = document.getElementById('analysisCanvas');
+    
+    // Hide both elements initially
+    analysisCanvas.style.display = 'none';
+    img.style.display = 'none';
 
-    img.src = message.image;
+
     img.onload = () => {
-      let imageWidth, imageHeight;
-      if (message.mode === 'full') {
-        imageWidth = img.naturalWidth / devicePixelRatio;
-        imageHeight = img.naturalHeight / devicePixelRatio;
-      } else {
-        imageWidth = img.naturalWidth;
-        imageHeight = img.naturalHeight;
-      }
-      canvas.width = imageWidth;
-      canvas.height = imageHeight;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, imageWidth, imageHeight);
-
-      runColorContrastAnalysis(ctx, canvas.width, canvas.height);
-
-      //alligning the contrast canvas with image
-      merged(canvas,ctx);
+      img.style.display = 'block';
+      
+      setTimeout(() => {
+        requestAnimationFrame(() => {
+          initializeAnalysis(img, analysisCanvas, message);
+        });
+      }, 100); // 1 second delay, adjust as needed
     };
+    
+    // Set the image source after setting up onload
+    img.src = message.image;
   }
 });
 
-document.getElementById('maskButton').addEventListener('click', () => {
-  const canvas = document.getElementById('analysisCanvas');
-  if (canvas.style.display === 'none') {
-    canvas.style.display = 'block';
-    document.getElementById('maskButton').innerText = 'Hide Mask';
+async function initializeAnalysis(img, analysisCanvas, message) {
+  const webglCanvas = document.createElement('canvas');
+  const ctx = analysisCanvas.getContext('2d', { willReadFrequently: true });
+  const gl = webglCanvas.getContext('webgl', { preserveDrawingBuffer: true });
+  const devicePixelRatio = message.devicePixelRatio || window.devicePixelRatio || 1;
+
+  if (!gl) {
+    console.error('WebGL not supported');
+    return;
+  }
+
+  let imageWidth, imageHeight;
+  if (message.mode === 'full') {
+    imageWidth = img.naturalWidth / devicePixelRatio;
+    imageHeight = img.naturalHeight / devicePixelRatio;
   } else {
-    canvas.style.display = 'none';
-    document.getElementById('maskButton').innerText = 'Show Mask';
+    imageWidth = img.naturalWidth;
+    imageHeight = img.naturalHeight;
   }
-});
+  webglCanvas.width = imageWidth;
+  webglCanvas.height = imageHeight;
+  analysisCanvas.width = imageWidth;
+  analysisCanvas.height = imageHeight;
 
-document.getElementById('rescanButton').addEventListener('click', () => {
-  const canvas = document.getElementById('analysisCanvas');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const devicePixelRatio = window.devicePixelRatio || 1;
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width, canvas.height);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-  // Run color contrast analysis with new parameters
-  runColorContrastAnalysis(ctx, canvas.width, canvas.height);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
 
-  //alligning the contrast canvas with image
-  merged(canvas,ctx);
+  const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+  const vertexShaderSource = `
+    attribute vec2 a_position;
+    attribute vec2 a_texCoord;
+    varying vec2 v_texCoord;
+    void main() {
+      gl_Position = vec4(a_position, 0, 1);
+      v_texCoord = a_texCoord;
+    }
+  `;
+  gl.shaderSource(vertexShader, vertexShaderSource);
+  gl.compileShader(vertexShader);
 
-});
+  const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+  const fragmentShaderSource = `
+    precision mediump float;
+    uniform sampler2D u_image;
+    varying vec2 v_texCoord;
+    void main() {
+      gl_FragColor = texture2D(u_image, v_texCoord);
+    }
+  `;
+  gl.shaderSource(fragmentShader, fragmentShaderSource);
+  gl.compileShader(fragmentShader);
 
-function runColorContrastAnalysis(ctx, width, height) {
+  const program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  gl.useProgram(program);
+
+  const positionBuffer = gl.createBuffer();
+  const positions = new Float32Array([
+    -1, -1,
+    1, -1,
+    -1, 1,
+    1, 1,
+  ]);
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+  const texCoordBuffer = gl.createBuffer();
+  const texCoords = new Float32Array([
+    0, 1,
+    1, 1,
+    0, 0,
+    1, 0,
+  ]);
+  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+
+  const positionLocation = gl.getAttribLocation(program, 'a_position');
+  const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.enableVertexAttribArray(positionLocation);
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+  gl.enableVertexAttribArray(texCoordLocation);
+  gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+  gl.viewport(0, 0, webglCanvas.width, webglCanvas.height);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  ctx.clearRect(0, 0, analysisCanvas.width, analysisCanvas.height);
+  ctx.drawImage(webglCanvas, 0, 0);
+
+  // Run analysis and handle the display transition
+  await runColorContrastAnalysis(ctx, analysisCanvas.width, analysisCanvas.height);
+  
+  // Switch to analysis canvas
+  analysisCanvas.style.display = 'block';
+
+  // Cleanup
+  gl.deleteTexture(texture);
+  gl.deleteProgram(program);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+  gl.deleteBuffer(positionBuffer);
+  gl.deleteBuffer(texCoordBuffer);
+}
+
+async function runColorContrastAnalysis(ctx, width, height) {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
-
+  
   const contrastLevel = document.getElementById('levelEvaluated-options').value;
   const pixelRadius = parseInt(document.getElementById('pixelRadius-options').value, 10);
-
-  const results = performAnalysis(data, width, height, contrastLevel, pixelRadius);
-
-  applyGreyingEffect(ctx, width, height);
-  updateCanvasWithResults(ctx, results, width, height);
-}
-function merged(canvas,ctx)
-{
-  const mergedCanvas = document.createElement('canvas');
-  const mergedCtx = mergedCanvas.getContext('2d');
-  mergedCanvas.width = canvas.width;
-  mergedCanvas.height = canvas.height;
-  mergedCtx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width, canvas.height);
-  mergedCtx.drawImage(canvas, 0, 0);
-
-  const mergedImageUrl = mergedCanvas.toDataURL('image/png');
-  const mergedImg = new Image();
-  mergedImg.src = mergedImageUrl;
-  mergedImg.onload = () => {
-    canvas.width = mergedImg.width;
-    canvas.height = mergedImg.height;
-      ctx.drawImage(mergedImg, 0, 0);
-  };
+  
+  // Create worker for parallel processing
+  const workerCode = `
+    ${evaluateColorContrast.toString()}
+    
+    onmessage = function(e) {
+      const { data, width, height, startY, endY, contrastLevel, pixelRadius } = e.data;
+      const results = new Uint8Array((endY - startY) * width * 4);
+      
+      for (let y = startY; y < endY; y++) {
+        for (let x = 0; x < width; x++) {
+          const index = ((y - startY) * width + x) * 4;
+          const sourceIndex = (y * width + x) * 4;
+          
+          const r = data[sourceIndex];
+          const g = data[sourceIndex + 1];
+          const b = data[sourceIndex + 2];
+          
+          let contrast = false;
+          pixelLoop: for (let dy = -pixelRadius; dy <= pixelRadius; dy++) {
+            for (let dx = -pixelRadius; dx <= pixelRadius; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              
+              const nx = x + dx;
+              const ny = y + dy;
+              
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                const nIndex = (ny * width + nx) * 4;
+                const nr = data[nIndex];
+                const ng = data[nIndex + 1];
+                const nb = data[nIndex + 2];
+                
+                if (evaluateColorContrast(r, g, b, nr, ng, nb, contrastLevel)) {
+                  contrast = true;
+                  break pixelLoop;
+                }
+              }
+            }
+          }
+          
+          if (contrast) {
+            results[index] = 255;
+            results[index + 1] = 255;
+            results[index + 2] = 255;
+            results[index + 3] = 255;
+          } else {
+            results[index] = 0;
+            results[index + 1] = 0;
+            results[index + 2] = 0;
+            results[index + 3] = 128;
+          }
+        }
+      }
+      
+      postMessage({ results, startY, endY });
+    }
+  `;
+  
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  const workerUrl = URL.createObjectURL(blob);
+  
+  // Split work between multiple workers
+  const workerCount = navigator.hardwareConcurrency || 4;
+  const rowsPerWorker = Math.ceil(height / workerCount);
+  const workers = [];
+  const results = new Uint8Array(width * height * 4);
+  
+  for (let i = 0; i < workerCount; i++) {
+    const startY = i * rowsPerWorker;
+    const endY = Math.min(startY + rowsPerWorker, height);
+    
+    const worker = new Worker(workerUrl);
+    workers.push(new Promise(resolve => {
+      worker.onmessage = function(e) {
+        const { results: workerResults, startY, endY } = e.data;
+        
+        // Copy worker results to main results array
+        const startIndex = startY * width * 4;
+        const endIndex = endY * width * 4;
+        results.set(workerResults, startIndex);
+        
+        worker.terminate();
+        resolve();
+      };
+      
+      worker.postMessage({
+        data: data,
+        width,
+        height,
+        startY,
+        endY,
+        contrastLevel,
+        pixelRadius
+      });
+    }));
+  }
+  
+  // Wait for all workers to complete
+  await Promise.all(workers);
+  URL.revokeObjectURL(workerUrl);
+  
+  // Apply results
+  const resultsImageData = new ImageData(new Uint8ClampedArray(results), width, height);
+  ctx.putImageData(resultsImageData, 0, 0);
+  
+  return merged(document.getElementById('analysisCanvas'), ctx);
 }
 
 function performAnalysis(data, width, height, contrastLevel, pixelRadius) {
@@ -156,26 +322,94 @@ function updateCanvasWithResults(ctx, results, width, height) {
 }
 
 function evaluateColorContrast(r1, g1, b1, r2, g2, b2, contrastLevel) {
-  const luminance = (r, g, b) => {
-    const a = [r, g, b].map((v) => {
+  // Cached luminance values for common colors
+  const luminanceCache = new Map();
+  
+  const getLuminance = (r, g, b) => {
+    const key = (r << 16) | (g << 8) | b;
+    if (luminanceCache.has(key)) {
+      return luminanceCache.get(key);
+    }
+    
+    const [rs, gs, bs] = [r, g, b].map(v => {
       v /= 255;
       return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
     });
-    return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+    
+    const luminance = rs * 0.2126 + gs * 0.7152 + bs * 0.0722;
+    luminanceCache.set(key, luminance);
+    return luminance;
   };
-
-  const L1 = luminance(r1, g1, b1) + 0.05;
-  const L2 = luminance(r2, g2, b2) + 0.05;
+  
+  const L1 = getLuminance(r1, g1, b1) + 0.05;
+  const L2 = getLuminance(r2, g2, b2) + 0.05;
   const ratio = L1 > L2 ? L1 / L2 : L2 / L1;
-
-  let requiredRatio = 4.5;
-  if (contrastLevel === 'WCAG-aa-large') {
-    requiredRatio = 3.0;
-  } else if (contrastLevel === 'WCAG-aaa-small') {
-    requiredRatio = 7.0;
-  } else if (contrastLevel === 'WCAG-aaa-large') {
-    requiredRatio = 4.5;
-  }
-
+  
+  const requiredRatio = {
+    'WCAG-aa-small': 4.5,
+    'WCAG-aa-large': 3.0,
+    'WCAG-aaa-small': 7.0,
+    'WCAG-aaa-large': 4.5
+  }[contrastLevel] || 4.5;
+  
   return ratio >= requiredRatio;
 }
+
+async function merged(canvas, ctx) {
+  return new Promise((resolve) => {
+    const mergedCanvas = document.createElement('canvas');
+    const mergedCtx = mergedCanvas.getContext('2d');
+    mergedCanvas.width = canvas.width;
+    mergedCanvas.height = canvas.height;
+    
+    const capturedImage = document.getElementById('capturedImage');
+    mergedCtx.drawImage(capturedImage, 0, 0, canvas.width, canvas.height);
+    mergedCtx.drawImage(canvas, 0, 0);
+
+    const mergedImageUrl = mergedCanvas.toDataURL('image/png');
+    const mergedImg = new Image();
+    
+    mergedImg.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(mergedImg, 0, 0);
+      resolve();
+    };
+    
+    mergedImg.src = mergedImageUrl;
+  });
+}
+
+document.getElementById('maskButton').addEventListener('click', () => {
+  const canvas = document.getElementById('analysisCanvas');
+  if (canvas.style.display === 'none') {
+    canvas.style.display = 'block';
+    document.getElementById('maskButton').innerText = 'Hide Mask';
+  } else {
+    canvas.style.display = 'none';
+    document.getElementById('maskButton').innerText = 'Show Mask';
+  }
+});
+
+document.getElementById('rescanButton').addEventListener('click', async () => {
+  const canvas = document.getElementById('analysisCanvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width, canvas.height);
+
+  await runColorContrastAnalysis(ctx, canvas.width, canvas.height);
+});
+
+document.getElementById('downloadButton').addEventListener('click', () => {
+  const canvas = document.getElementById('analysisCanvas');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `contrast-analysis-${timestamp}.png`;
+  
+  const downloadLink = document.createElement('a');
+  downloadLink.download = filename;
+  downloadLink.href = canvas.toDataURL('image/png');
+  
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
+});

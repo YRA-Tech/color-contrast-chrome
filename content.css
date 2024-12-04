@@ -2,3 +2,30 @@
   z-index: 10000;
   cursor: crosshair;
 }
+
+#instruction-box {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.instruction-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.cancel-instruction {
+  color: #ff9999;
+  font-size: 12px;
+}
