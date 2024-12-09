@@ -2,23 +2,35 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.image) {
     const img = document.getElementById('capturedImage');
     const analysisCanvas = document.getElementById('analysisCanvas');
+    const rescanButton = document.getElementById('rescanButton');
+    const maskButton = document.getElementById('maskButton');
+    const downloadButton = document.getElementById('downloadButton');
     
-    // Hide both elements initially
     analysisCanvas.style.display = 'none';
     img.style.display = 'none';
 
+    rescanButton.disabled = true;
+    maskButton.disabled = true;
+    downloadButton.disabled = true;
+    rescanButton.textContent = 'Initial Scan...';
+    maskButton.textContent = 'Mask Loading...';
 
     img.onload = () => {
       img.style.display = 'block';
       
       setTimeout(() => {
         requestAnimationFrame(() => {
-          initializeAnalysis(img, analysisCanvas, message);
+          initializeAnalysis(img, analysisCanvas, message).then(() => {
+            
+            rescanButton.disabled = false;
+            maskButton.disabled = false;
+            downloadButton.disabled = false;
+            rescanButton.textContent = 'Rescan';
+            maskButton.textContent = 'Hide Mask';
+          });
         });
-      }, 100); // 1 second delay, adjust as needed
+      }, 100);
     };
-    
-    // Set the image source after setting up onload
     img.src = message.image;
   }
 });
@@ -125,8 +137,7 @@ async function initializeAnalysis(img, analysisCanvas, message) {
   ctx.clearRect(0, 0, analysisCanvas.width, analysisCanvas.height);
   ctx.drawImage(webglCanvas, 0, 0);
 
-  // Run analysis and handle the display transition
-  await runColorContrastAnalysis(ctx, analysisCanvas.width, analysisCanvas.height);
+  await runColorContrastAnalysis(ctx, analysisCanvas.width, analysisCanvas.height,false);
   
   // Switch to analysis canvas
   analysisCanvas.style.display = 'block';
@@ -140,13 +151,31 @@ async function initializeAnalysis(img, analysisCanvas, message) {
   gl.deleteBuffer(texCoordBuffer);
 }
 
-async function runColorContrastAnalysis(ctx, width, height) {
+async function runColorContrastAnalysis(ctx, width, height,useToolbarSettings = false) {
+
+  let contrastLevel, pixelRadius;
+  if(useToolbarSettings)
+  {
+    const wcagLevelSelect = document.getElementById('levelEvaluated-options');
+    const pixelRadiusSelect = document.getElementById('pixelRadius-options');
+    contrastLevel = wcagLevelSelect.value;
+    pixelRadius = parseInt(pixelRadiusSelect.value, 10);
+  }
+  else
+  {
+    const settings = await new Promise(resolve => {
+      chrome.storage.sync.get({
+        wcagLevel: 'WCAG-aa-small',
+        pixelRadius: '1'
+      }, resolve);
+    });
+    contrastLevel = settings.wcagLevel;
+    pixelRadius = parseInt(settings.pixelRadius, 10);
+  }
+
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
-  
-  const contrastLevel = document.getElementById('levelEvaluated-options').value;
-  const pixelRadius = parseInt(document.getElementById('pixelRadius-options').value, 10);
-  
+
   // Create worker for parallel processing
   const workerCode = `
     ${evaluateColorContrast.toString()}
@@ -207,7 +236,7 @@ async function runColorContrastAnalysis(ctx, width, height) {
   const blob = new Blob([workerCode], { type: 'application/javascript' });
   const workerUrl = URL.createObjectURL(blob);
   
-  // Split work between multiple workers
+  // Split work between multiple workers ( CPU logical processor or 4 LP)
   const workerCount = navigator.hardwareConcurrency || 4;
   const rowsPerWorker = Math.ceil(height / workerCount);
   const workers = [];
@@ -224,7 +253,6 @@ async function runColorContrastAnalysis(ctx, width, height) {
         
         // Copy worker results to main results array
         const startIndex = startY * width * 4;
-        const endIndex = endY * width * 4;
         results.set(workerResults, startIndex);
         
         worker.terminate();
@@ -391,13 +419,52 @@ document.getElementById('maskButton').addEventListener('click', () => {
 });
 
 document.getElementById('rescanButton').addEventListener('click', async () => {
-  const canvas = document.getElementById('analysisCanvas');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  try {
+    const rescanButton = document.getElementById('rescanButton');
+    const maskButton = document.getElementById('maskButton');
+    const downloadButton = document.getElementById('downloadButton');
+    const canvas = document.getElementById('analysisCanvas');
+    if (!canvas) throw new Error('Analysis canvas not found');
+    
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('Could not get canvas context');
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(document.getElementById('capturedImage'), 0, 0, canvas.width, canvas.height);
+    let saveMaskbuttonText = maskButton.textContent;
+    
+    // Disable button during scan
+    rescanButton.disabled = true;
+    maskButton.disabled=true;
+    downloadButton.disabled=true;
+    rescanButton.textContent = 'Rescanning...';
+    maskButton.textContent = 'New Mask Loading...';
 
-  await runColorContrastAnalysis(ctx, canvas.width, canvas.height);
+    // Clear and redraw
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const capturedImage = document.getElementById('capturedImage');
+    if (!capturedImage) throw new Error('Source image not found');
+    
+    ctx.drawImage(capturedImage, 0, 0, canvas.width, canvas.height);
+    
+    // Run analysis with current toolbar settings
+    await runColorContrastAnalysis(ctx, canvas.width, canvas.height,true);
+    
+    // Reset button state
+    rescanButton.disabled = false;
+    maskButton.disabled = false;
+    downloadButton.disabled = false;
+    rescanButton.textContent = 'Rescan';
+    maskButton.textContent = saveMaskbuttonText;
+    
+  } catch (error) {
+    console.error('Rescan failed:', error);
+    const button = document.getElementById('rescanButton');
+    button.disabled = false;
+    button.textContent = 'Rescan Failed';
+    setTimeout(() => {
+      button.textContent = 'Rescan';
+    }, 2000);
+  }
 });
 
 document.getElementById('downloadButton').addEventListener('click', () => {
@@ -412,4 +479,14 @@ document.getElementById('downloadButton').addEventListener('click', () => {
   document.body.appendChild(downloadLink);
   downloadLink.click();
   document.body.removeChild(downloadLink);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  chrome.storage.sync.get({
+    wcagLevel: 'WCAG-aa-small',
+    pixelRadius: '1'
+  }, (settings) => {
+    document.getElementById('levelEvaluated-options').value = settings.wcagLevel;
+    document.getElementById('pixelRadius-options').value = settings.pixelRadius;
+  });
 });

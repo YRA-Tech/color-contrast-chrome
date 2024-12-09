@@ -172,6 +172,125 @@ async function captureWholePage(callback) {
   });
 }
 
+async function captureDesktop(devicePixelRatio, sendResponse) {
+  console.log('[Background] Starting desktop capture');
+  
+  try {
+    // Get current tab
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs[0];
+    
+    if (!activeTab?.id) {
+      console.error('[Background] No active tab found');
+      sendResponse({ success: false, error: 'No active tab found' });
+      return;
+    }
+
+    console.log('[Background] Requesting desktop media access');
+    
+    // Request desktop capture
+    chrome.desktopCapture.chooseDesktopMedia(
+      ['screen', 'window'], 
+      activeTab, 
+      async (streamId) => {
+        if (!streamId) {
+          console.error('[Background] No stream ID received');
+          sendResponse({ success: false, error: 'No stream selected' });
+          return;
+        }
+
+        console.log('[Background] Got stream ID, injecting capture script');
+
+        try {
+          // Execute capture in the current tab
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: activeTab.id },
+            function: async (streamId) => {
+              try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                  audio: false,
+                  video: {
+                    mandatory: {
+                      chromeMediaSource: 'desktop',
+                      chromeMediaSourceId: streamId
+                    }
+                  }
+                });
+
+                const video = document.createElement('video');
+                video.style.position = 'fixed';
+                video.style.top = '-9999px';
+                document.body.appendChild(video);
+                video.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                  video.onloadedmetadata = () => {
+                    video.play();
+                    resolve();
+                  };
+                });
+
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+
+                // Cleanup
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                video.remove();
+                
+                const dataUrl = canvas.toDataURL('image/png');
+                canvas.remove();
+
+                return dataUrl;
+              } catch (error) {
+                console.error('Capture error:', error);
+                return null;
+              }
+            },
+            args: [streamId]
+          });
+
+          if (results?.[0]?.result) {
+            chrome.tabs.create({ 
+              url: chrome.runtime.getURL('capture.html') 
+            }, (newTab) => {
+              const listener = (tabId, changeInfo) => {
+                if (tabId === newTab.id && changeInfo.status === 'complete') {
+                  chrome.tabs.sendMessage(newTab.id, {
+                    image: results[0].result,
+                    mode: 'desktop',
+                    devicePixelRatio: devicePixelRatio
+                  });
+                  chrome.tabs.onUpdated.removeListener(listener);
+                }
+              };
+              chrome.tabs.onUpdated.addListener(listener);
+            });
+
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'Failed to capture screen' });
+          }
+
+        } catch (error) {
+          console.error('[Background] Capture error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      }
+    );
+
+    return true;
+  } catch (error) {
+    console.error('[Background] Desktop capture error:', error);
+    sendResponse({ success: false, error: error.message });
+    return true;
+  }
+}
+
 const debouncedCaptureTab = debounce(captureTab, 500);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {   
@@ -323,4 +442,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch(error => console.error('Error processing image:', error));
     });
   }
+  else if (message.action === 'captureDesktop') {
+    captureDesktop(message.devicePixelRatio, sendResponse);
+    return true;
+  }
 });
+

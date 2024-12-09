@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Color Contrast Analyzer Options</title>
+  <style>
+    body {
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #f5f5f5;
+      line-height: 1.6;
+    }
+    
+    .container {
+      background-color: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+    }
+
+    h1 {
+      color: #2c3e50;
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #2c3e50;
+    }
+
+    .option {
+      margin: 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    label {
+      color: #34495e;
+      cursor: pointer;
+    }
+
+    select {
+      padding: 6px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+
+    .button-container {
+      margin-top: 24px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: #2980b9;
+    }
+
+    .status {
+      display: none;
+      color: #27ae60;
+      margin-right: 12px;
+      align-items: center;
+    }
+
+    .status.show {
+      display: flex;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 20px;
+      }
+
+      .button-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+     
+      <h1>Color Contrast Analyzer Options</h1>
+    </div>
+
+    <div class="section">
+      <fieldset>
+        <legend class="section-title">WCAG Level:</legend>
+        <div class="option">
+          <input type="radio" id="aa-small" name="wcagLevel" value="WCAG-aa-small">
+          <label for="aa-small">Level AA, Small Non-Bold Text (4.5:1)</label>
+        </div>
+        <div class="option">
+          <input type="radio" id="aa-large" name="wcagLevel" value="WCAG-aa-large">
+          <label for="aa-large">Level AA, Medium Bold and Large Non-Bold Text (3:1)</label>
+        </div>
+        <div class="option">
+          <input type="radio" id="aaa-small" name="wcagLevel" value="WCAG-aaa-small">
+          <label for="aaa-small">Level AAA, Small Non-Bold Text (7:1)</label>
+        </div>
+        <div class="option">
+          <input type="radio" id="aaa-large" name="wcagLevel" value="WCAG-aaa-large">
+          <label for="aaa-large">Level AAA, Medium Bold and Large Non-Bold Text (4.5:1)</label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="section">
+      <label for="pixelRadius" class="section-title">Pixel Radius Scan:</label>
+      <div class="option">
+        <select id="pixelRadius" aria-label="Pixel Radius">
+          <option value="1">1 pixel</option>
+          <option value="2">2 pixels</option>
+          <option value="3">3 pixels</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="button-container">
+      <div id="status" class="status" aria-live="polite">
+        <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;">
+          <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+        </svg>
+        Settings saved!
+      </div>
+      <button id="save" class="button">Save</button>
+      <button id="close" class="button">Close</button>
+    </div>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>
