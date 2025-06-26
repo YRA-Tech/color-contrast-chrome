@@ -75,17 +75,19 @@
     }
 
     button {
-      background-color: #3498db;
-      color: white;
-      border: none;
+      background-color: white;
+      color: black;
+      border: 1px solid orange;
       padding: 8px 16px;
       border-radius: 4px;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: all 0.2s;
+      box-shadow: 0 2px 4px rgba(255, 165, 0, 0.2);
     }
 
     button:hover {
-      background-color: #2980b9;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(255, 165, 0, 0.3);
     }
 
     .status {
@@ -97,6 +99,26 @@
 
     .status.show {
       display: flex;
+    }
+
+    .webgl-status {
+      font-size: 12px;
+      margin-top: 4px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .webgl-status.available {
+      background-color: #e8f5e8;
+      color: #2d5a2d;
+      border: 1px solid #c3e6c3;
+    }
+
+    .webgl-status.unavailable {
+      background-color: #fef2f2;
+      color: #7f1d1d;
+      border: 1px solid #fecaca;
     }
 
     @media (max-width: 600px) {
@@ -150,6 +172,17 @@
           <option value="3">3 pixels</option>
         </select>
       </div>
+    </div>
+
+    <div class="section">
+      <fieldset>
+        <legend class="section-title">Performance Settings:</legend>
+        <div class="option">
+          <input type="checkbox" id="useWebGL" name="useWebGL">
+          <label for="useWebGL">Use GPU acceleration (WebGL) when available</label>
+          <div id="webglStatus" class="webgl-status"></div>
+        </div>
+      </fieldset>
     </div>
 
     <div class="button-container">

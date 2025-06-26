@@ -145,6 +145,8 @@ document.getElementById('captureFull').addEventListener('click', () => {
         mode: 'full',
         devicePixelRatio: window.devicePixelRatio 
       });
+      // Auto-dismiss popup after starting capture
+      window.close();
     }
   });
 });
@@ -154,6 +156,8 @@ document.getElementById('captureArea').addEventListener('click', () => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0] && !isSpecialPage(tabs[0].url) && !isRestrictedDomain(tabs[0].url)) {
       chrome.runtime.sendMessage({ action: 'captureScreen', mode: 'selected' });
+      // Auto-dismiss popup after starting capture
+      window.close();
     }
   });
 });
@@ -167,6 +171,8 @@ document.getElementById('captureWhole').addEventListener('click', () => {
         mode: 'whole',
         devicePixelRatio: window.devicePixelRatio 
       });
+      // Auto-dismiss popup after starting capture
+      window.close();
     }
   });
 });
@@ -192,6 +198,9 @@ document.getElementById('captureDesktop').addEventListener('click', () => {
       showError(chrome.runtime.lastError.message);
     } else if (response && !response.success) {
       showError(response.error || 'Failed to capture desktop');
+    } else {
+      // Auto-dismiss popup after successful desktop capture initiation
+      window.close();
     }
   });
 });

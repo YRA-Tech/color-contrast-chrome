@@ -16,9 +16,14 @@ chrome.runtime.onMessage.addListener((message) => {
     maskButton.textContent = 'Mask Loading...';
 
     img.onload = () => {
+      console.log('=== IMAGE LOADED ===');
+      console.log('Image src length:', message.image.length);
+      console.log('Image loaded - Natural size:', img.naturalWidth, 'x', img.naturalHeight);
+      
       img.style.display = 'block';
       
       setTimeout(() => {
+        console.log('After display - Image rendered size:', img.offsetWidth, 'x', img.offsetHeight);
         requestAnimationFrame(() => {
           initializeAnalysis(img, analysisCanvas, message).then(() => {
             
@@ -50,14 +55,33 @@ async function initializeAnalysis(img, analysisCanvas, message) {
   if (message.mode === 'full') {
     imageWidth = img.naturalWidth / devicePixelRatio;
     imageHeight = img.naturalHeight / devicePixelRatio;
+  } else if (message.mode === 'whole') {
+    // For whole page capture, use natural dimensions directly
+    imageWidth = img.naturalWidth;
+    imageHeight = img.naturalHeight;
+    console.log('Whole page mode - using natural dimensions directly');
   } else {
     imageWidth = img.naturalWidth;
     imageHeight = img.naturalHeight;
   }
+  
+  // Console logging for size comparison
+  console.log('=== IMAGE SIZE ANALYSIS ===');
+  console.log('Original Image (naturalWidth x naturalHeight):', img.naturalWidth, 'x', img.naturalHeight);
+  console.log('Device Pixel Ratio:', devicePixelRatio);
+  console.log('Capture Mode:', message.mode);
+  console.log('Calculated Canvas Size (imageWidth x imageHeight):', imageWidth, 'x', imageHeight);
+  console.log('Image Display Size (offsetWidth x offsetHeight):', img.offsetWidth, 'x', img.offsetHeight);
+  console.log('Image Display Size (clientWidth x clientHeight):', img.clientWidth, 'x', img.clientHeight);
+  
   webglCanvas.width = imageWidth;
   webglCanvas.height = imageHeight;
   analysisCanvas.width = imageWidth;
   analysisCanvas.height = imageHeight;
+  
+  console.log('WebGL Canvas Size:', webglCanvas.width, 'x', webglCanvas.height);
+  console.log('Analysis Canvas Size:', analysisCanvas.width, 'x', analysisCanvas.height);
+  console.log('=============================');
 
   const texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -139,6 +163,14 @@ async function initializeAnalysis(img, analysisCanvas, message) {
 
   await runColorContrastAnalysis(ctx, analysisCanvas.width, analysisCanvas.height,false);
   
+  // Console logging after analysis
+  console.log('=== POST-ANALYSIS SIZE CHECK ===');
+  console.log('Analysis Canvas CSS Size:', analysisCanvas.style.width, 'x', analysisCanvas.style.height);
+  console.log('Analysis Canvas Computed Style:', getComputedStyle(analysisCanvas).width, 'x', getComputedStyle(analysisCanvas).height);
+  console.log('Image CSS Size:', img.style.width, 'x', img.style.height);
+  console.log('Image Computed Style:', getComputedStyle(img).width, 'x', getComputedStyle(img).height);
+  console.log('================================');
+  
   // Switch to analysis canvas
   analysisCanvas.style.display = 'block';
 
@@ -151,113 +183,361 @@ async function initializeAnalysis(img, analysisCanvas, message) {
   gl.deleteBuffer(texCoordBuffer);
 }
 
-async function runColorContrastAnalysis(ctx, width, height,useToolbarSettings = false) {
-
-  let contrastLevel, pixelRadius;
-  if(useToolbarSettings)
-  {
+async function runColorContrastAnalysis(ctx, width, height, useToolbarSettings = false) {
+  let contrastLevel, pixelRadius, useWebGL;
+  if(useToolbarSettings) {
     const wcagLevelSelect = document.getElementById('levelEvaluated-options');
     const pixelRadiusSelect = document.getElementById('pixelRadius-options');
+    const useWebGLCheckbox = document.getElementById('useWebGL-options');
     contrastLevel = wcagLevelSelect.value;
     pixelRadius = parseInt(pixelRadiusSelect.value, 10);
-  }
-  else
-  {
+    useWebGL = useWebGLCheckbox.checked;
+  } else {
     const settings = await new Promise(resolve => {
       chrome.storage.sync.get({
         wcagLevel: 'WCAG-aa-small',
-        pixelRadius: '1'
+        pixelRadius: '3',
+        useWebGL: true
       }, resolve);
     });
     contrastLevel = settings.wcagLevel;
     pixelRadius = parseInt(settings.pixelRadius, 10);
+    useWebGL = settings.useWebGL;
   }
 
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
-  // Create worker for parallel processing
-  const workerCode = `
-    ${evaluateColorContrast.toString()}
+  console.log('=== OPTIMIZED COLOR CONTRAST ANALYSIS START ===');
+  console.log('Analysis settings:', { contrastLevel, pixelRadius, width, height, useWebGL });
+  
+  // Check user preference for WebGL
+  if (useWebGL) {
+    updateAnalysisProgress('Initializing GPU analysis...', 0);
     
-    onmessage = function(e) {
-      const { data, width, height, startY, endY, contrastLevel, pixelRadius } = e.data;
-      const results = new Uint8Array((endY - startY) * width * 4);
+    try {
+      // Try WebGL GPU acceleration first (with coordinate fixes)
+      const webglResult = await tryWebGLAnalysis(data, width, height, contrastLevel, pixelRadius);
+      if (webglResult) {
+        const resultsImageData = new ImageData(new Uint8ClampedArray(webglResult), width, height);
+        ctx.putImageData(resultsImageData, 0, 0);
+        updateAnalysisProgress('Complete', 100);
+        return merged(document.getElementById('analysisCanvas'), ctx);
+      }
+    } catch (error) {
+      console.warn('WebGL analysis failed, falling back to Worker:', error);
+    }
+  } else {
+    console.log('WebGL disabled by user preference - using CPU workers');
+  }
+  
+  // Fallback to Web Worker chunked processing
+  updateAnalysisProgress('Using multi-threaded CPU analysis...', 10);
+  const workerResult = await runWorkerAnalysis(data, width, height, contrastLevel, pixelRadius);
+  
+  const resultsImageData = new ImageData(new Uint8ClampedArray(workerResult), width, height);
+  ctx.putImageData(resultsImageData, 0, 0);
+  updateAnalysisProgress('Complete', 100);
+  
+  return merged(document.getElementById('analysisCanvas'), ctx);
+}
+
+// WebGL GPU-accelerated analysis
+async function tryWebGLAnalysis(data, width, height, contrastLevel, pixelRadius) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
+  
+  if (!gl) {
+    throw new Error('WebGL2 not supported');
+  }
+  
+  updateAnalysisProgress('Setting up GPU shaders...', 5);
+  
+  // Create shader program for contrast analysis
+  const vertexShaderSource = `#version 300 es
+    in vec2 a_position;
+    in vec2 a_texCoord;
+    out vec2 v_texCoord;
+    void main() {
+      gl_Position = vec4(a_position, 0, 1);
+      v_texCoord = a_texCoord;
+    }`;
+    
+  const fragmentShaderSource = `#version 300 es
+    precision highp float;
+    uniform sampler2D u_image;
+    uniform float u_width;
+    uniform float u_height;
+    uniform int u_radius;
+    uniform float u_contrastThreshold;
+    in vec2 v_texCoord;
+    out vec4 fragColor;
+    
+    float getLuminance(vec3 color) {
+      return 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+    }
+    
+    float getContrast(float l1, float l2) {
+      return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05);
+    }
+    
+    void main() {
+      // Fix coordinate system - WebGL Y is flipped compared to image data
+      vec2 flippedCoord = vec2(v_texCoord.x, 1.0 - v_texCoord.y);
+      vec2 texelSize = 1.0 / vec2(u_width, u_height);
       
-      for (let y = startY; y < endY; y++) {
-        for (let x = 0; x < width; x++) {
-          const index = ((y - startY) * width + x) * 4;
-          const sourceIndex = (y * width + x) * 4;
-          
-          const r = data[sourceIndex];
-          const g = data[sourceIndex + 1];
-          const b = data[sourceIndex + 2];
-          
-          let contrast = false;
-          pixelLoop: for (let dy = -pixelRadius; dy <= pixelRadius; dy++) {
-            for (let dx = -pixelRadius; dx <= pixelRadius; dx++) {
-              if (dx === 0 && dy === 0) continue;
+      vec4 centerPixel = texture(u_image, flippedCoord);
+      float centerLum = getLuminance(centerPixel.rgb);
+      
+      int foundRadius = 0;
+      
+      // Check each radius iteratively (1, 2, 3)
+      for (int radius = 1; radius <= u_radius; radius++) {
+        bool foundAtRadius = false;
+        
+        for (int dy = -radius; dy <= radius; dy++) {
+          for (int dx = -radius; dx <= radius; dx++) {
+            if (dx == 0 && dy == 0) continue;
+            
+            // Use flipped coordinates and ensure pixel-perfect sampling
+            vec2 sampleCoord = flippedCoord + vec2(float(dx), float(dy)) * texelSize;
+            
+            if (sampleCoord.x >= 0.0 && sampleCoord.x <= 1.0 && 
+                sampleCoord.y >= 0.0 && sampleCoord.y <= 1.0) {
               
-              const nx = x + dx;
-              const ny = y + dy;
+              vec4 samplePixel = texture(u_image, sampleCoord);
+              float sampleLum = getLuminance(samplePixel.rgb);
+              float contrast = getContrast(centerLum, sampleLum);
               
-              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                const nIndex = (ny * width + nx) * 4;
-                const nr = data[nIndex];
-                const ng = data[nIndex + 1];
-                const nb = data[nIndex + 2];
+              if (contrast >= u_contrastThreshold) {
+                foundAtRadius = true;
+                foundRadius = radius;
+                break;
+              }
+            }
+          }
+          if (foundAtRadius) break;
+        }
+        
+        if (foundAtRadius) break;
+      }
+      
+      if (foundRadius > 0) {
+        // Set grayscale value based on radius: 1=white(255), 2=light gray(170), 3=medium gray(85)
+        float grayValue = foundRadius == 1 ? 1.0 : (foundRadius == 2 ? 0.667 : 0.333);
+        fragColor = vec4(grayValue, grayValue, grayValue, 1.0);
+      } else {
+        fragColor = vec4(0.0, 0.0, 0.0, 0.5);
+      }
+    }`;
+    
+  updateAnalysisProgress('Compiling GPU shaders...', 15);
+    
+  const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+  const program = createProgram(gl, vertexShader, fragmentShader);
+  
+  // Set up geometry with correct texture coordinates for image data
+  const positions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+  const texCoords = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
+  
+  const positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+  
+  const texCoordBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+  
+  updateAnalysisProgress('Uploading image to GPU...', 25);
+  
+  // Create and upload texture
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  
+  // Convert Uint8Array to ImageData for texture upload
+  const imageData = new ImageData(new Uint8ClampedArray(data), width, height);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageData);
+  
+  // Set up program
+  gl.useProgram(program);
+  
+  const positionLocation = gl.getAttribLocation(program, 'a_position');
+  const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+  
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.enableVertexAttribArray(positionLocation);
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+  
+  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+  gl.enableVertexAttribArray(texCoordLocation);
+  gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+  
+  // Set uniforms
+  gl.uniform1f(gl.getUniformLocation(program, 'u_width'), width);
+  gl.uniform1f(gl.getUniformLocation(program, 'u_height'), height);
+  gl.uniform1i(gl.getUniformLocation(program, 'u_radius'), pixelRadius);
+  
+  const contrastThresholds = {
+    'WCAG-aa-small': 4.5,
+    'WCAG-aa-large': 3.0,
+    'WCAG-aaa-small': 7.0,
+    'WCAG-aaa-large': 4.5
+  };
+  gl.uniform1f(gl.getUniformLocation(program, 'u_contrastThreshold'), contrastThresholds[contrastLevel] || 4.5);
+  
+  updateAnalysisProgress('Running GPU analysis...', 40);
+  
+  // Render
+  gl.viewport(0, 0, width, height);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  
+  updateAnalysisProgress('Reading GPU results...', 80);
+  
+  // Read back results - WebGL readPixels reads from bottom-left, so we need to flip back
+  const result = new Uint8Array(width * height * 4);
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, result);
+  
+  // Flip the result vertically to match image data coordinate system
+  const flippedResult = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const srcIndex = ((height - 1 - y) * width + x) * 4;
+      const dstIndex = (y * width + x) * 4;
+      flippedResult[dstIndex] = result[srcIndex];
+      flippedResult[dstIndex + 1] = result[srcIndex + 1];
+      flippedResult[dstIndex + 2] = result[srcIndex + 2];
+      flippedResult[dstIndex + 3] = result[srcIndex + 3];
+    }
+  }
+  
+  // Cleanup
+  gl.deleteTexture(texture);
+  gl.deleteProgram(program);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+  gl.deleteBuffer(positionBuffer);
+  gl.deleteBuffer(texCoordBuffer);
+  
+  updateAnalysisProgress('GPU analysis complete', 90);
+  return flippedResult;
+}
+
+// Web Worker analysis for CPU fallback
+async function runWorkerAnalysis(data, width, height, contrastLevel, pixelRadius) {
+  const numWorkers = Math.min(4, navigator.hardwareConcurrency || 4);
+  const chunkHeight = Math.ceil(height / numWorkers);
+  
+  const workerPromises = [];
+  
+  for (let i = 0; i < numWorkers; i++) {
+    const startY = i * chunkHeight;
+    const endY = Math.min(startY + chunkHeight, height);
+    
+    if (startY >= height) break;
+    
+    const workerPromise = new Promise((resolve, reject) => {
+      const worker = new Worker(URL.createObjectURL(new Blob([`
+        self.onmessage = function(e) {
+          const { data, width, height, startY, endY, contrastLevel, pixelRadius } = e.data;
+          
+          function evaluateColorContrast(r1, g1, b1, r2, g2, b2, level) {
+            const getLuminance = (r, g, b) => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            const L1 = getLuminance(r1, g1, b1);
+            const L2 = getLuminance(r2, g2, b2);
+            const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+            
+            const thresholds = {
+              'WCAG-aa-small': 4.5,
+              'WCAG-aa-large': 3.0,
+              'WCAG-aaa-small': 7.0,
+              'WCAG-aaa-large': 4.5
+            };
+            
+            return ratio >= (thresholds[level] || 4.5);
+          }
+          
+          const chunkResults = new Uint8Array((endY - startY) * width * 4);
+          
+          // Initialize chunk to black
+          for (let i = 0; i < chunkResults.length; i += 4) {
+            chunkResults[i] = 0;     // R
+            chunkResults[i + 1] = 0; // G
+            chunkResults[i + 2] = 0; // B
+            chunkResults[i + 3] = 128; // A
+          }
+          
+          // Iterative analysis: check radius 1, then 2, then 3
+          for (let radius = 1; radius <= pixelRadius; radius++) {
+            const grayValue = radius === 1 ? 255 : (radius === 2 ? 170 : 85);
+            
+            for (let y = startY; y < endY; y++) {
+              for (let x = 0; x < width; x++) {
+                const globalIndex = (y * width + x) * 4;
+                const chunkIndex = ((y - startY) * width + x) * 4;
                 
-                if (evaluateColorContrast(r, g, b, nr, ng, nb, contrastLevel)) {
-                  contrast = true;
-                  break pixelLoop;
+                // Skip if already marked with contrast at smaller radius
+                if (chunkResults[chunkIndex] > 0) continue;
+                
+                const r = data[globalIndex];
+                const g = data[globalIndex + 1];
+                const b = data[globalIndex + 2];
+                
+                let foundContrast = false;
+                
+                // Check all pixels within current radius
+                for (let dy = -radius; dy <= radius && !foundContrast; dy++) {
+                  for (let dx = -radius; dx <= radius; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    
+                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                      const nIndex = (ny * width + nx) * 4;
+                      const nr = data[nIndex];
+                      const ng = data[nIndex + 1];
+                      const nb = data[nIndex + 2];
+                      
+                      if (evaluateColorContrast(r, g, b, nr, ng, nb, contrastLevel)) {
+                        foundContrast = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+                
+                if (foundContrast) {
+                  chunkResults[chunkIndex] = grayValue;
+                  chunkResults[chunkIndex + 1] = grayValue;
+                  chunkResults[chunkIndex + 2] = grayValue;
+                  chunkResults[chunkIndex + 3] = 255;
                 }
               }
             }
           }
           
-          if (contrast) {
-            results[index] = 255;
-            results[index + 1] = 255;
-            results[index + 2] = 255;
-            results[index + 3] = 255;
-          } else {
-            results[index] = 0;
-            results[index + 1] = 0;
-            results[index + 2] = 0;
-            results[index + 3] = 128;
-          }
-        }
-      }
+          self.postMessage({ chunkResults, startY, endY });
+        };
+      `], { type: 'application/javascript' })));
       
-      postMessage({ results, startY, endY });
-    }
-  `;
-  
-  const blob = new Blob([workerCode], { type: 'application/javascript' });
-  const workerUrl = URL.createObjectURL(blob);
-  
-  // Split work between multiple workers ( CPU logical processor or 4 LP)
-  const workerCount = navigator.hardwareConcurrency || 4;
-  const rowsPerWorker = Math.ceil(height / workerCount);
-  const workers = [];
-  const results = new Uint8Array(width * height * 4);
-  
-  for (let i = 0; i < workerCount; i++) {
-    const startY = i * rowsPerWorker;
-    const endY = Math.min(startY + rowsPerWorker, height);
-    
-    const worker = new Worker(workerUrl);
-    workers.push(new Promise(resolve => {
-      worker.onmessage = function(e) {
-        const { results: workerResults, startY, endY } = e.data;
-        
-        // Copy worker results to main results array
-        const startIndex = startY * width * 4;
-        results.set(workerResults, startIndex);
-        
+      worker.onmessage = (e) => {
         worker.terminate();
-        resolve();
+        resolve(e.data);
       };
+      
+      worker.onerror = (error) => {
+        worker.terminate();
+        reject(error);
+      };
+      
+      updateAnalysisProgress(`Processing chunk ${i + 1}/${numWorkers}...`, 20 + (i / numWorkers) * 60);
       
       worker.postMessage({
         data: data,
@@ -268,63 +548,92 @@ async function runColorContrastAnalysis(ctx, width, height,useToolbarSettings = 
         contrastLevel,
         pixelRadius
       });
-    }));
+    });
+    
+    workerPromises.push(workerPromise);
   }
   
-  // Wait for all workers to complete
-  await Promise.all(workers);
-  URL.revokeObjectURL(workerUrl);
+  const results = await Promise.all(workerPromises);
   
-  // Apply results
-  const resultsImageData = new ImageData(new Uint8ClampedArray(results), width, height);
-  ctx.putImageData(resultsImageData, 0, 0);
+  updateAnalysisProgress('Combining worker results...', 85);
   
-  return merged(document.getElementById('analysisCanvas'), ctx);
-}
-
-function performAnalysis(data, width, height, contrastLevel, pixelRadius) {
-  const results = new Uint8Array(data.length);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const index = (y * width + x) * 4;
-      const r = data[index];
-      const g = data[index + 1];
-      const b = data[index + 2];
-
-      let contrast = false;
-      for (let dy = -pixelRadius; dy <= pixelRadius; dy++) {
-        for (let dx = -pixelRadius; dx <= pixelRadius; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            const nIndex = (ny * width + nx) * 4;
-            const nr = data[nIndex];
-            const ng = data[nIndex + 1];
-            const nb = data[nIndex + 2];
-            contrast = evaluateColorContrast(r, g, b, nr, ng, nb, contrastLevel);
-            if (contrast) break;
-          }
-        }
-        if (contrast) break;
-      }
-
-      if (contrast) {
-        results[index] = 255;
-        results[index + 1] = 255;
-        results[index + 2] = 255;
-        results[index + 3] = 255;
-      } else {
-        results[index] = 0;
-        results[index + 1] = 0;
-        results[index + 2] = 0;
-        results[index + 3] = 128;
-      }
+  // Combine results
+  const finalResults = new Uint8Array(width * height * 4);
+  
+  for (const { chunkResults, startY, endY } of results) {
+    const chunkHeight = endY - startY;
+    for (let y = 0; y < chunkHeight; y++) {
+      const sourceStart = y * width * 4;
+      const destStart = (startY + y) * width * 4;
+      finalResults.set(chunkResults.subarray(sourceStart, sourceStart + width * 4), destStart);
     }
   }
+  
+  return finalResults;
+}
 
-  return results;
+// Helper functions for WebGL
+function createShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    throw new Error('Shader compilation failed');
+  }
+  
+  return shader;
+}
+
+function createProgram(gl, vertexShader, fragmentShader) {
+  const program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error('Program link error:', gl.getProgramInfoLog(program));
+    gl.deleteProgram(program);
+    throw new Error('Program linking failed');
+  }
+  
+  return program;
+}
+
+// Progress feedback
+function updateAnalysisProgress(message, percent) {
+  console.log(`Analysis Progress: ${message} (${percent}%)`);
+  
+  // Update button text to show progress
+  const rescanButton = document.getElementById('rescanButton');
+  if (rescanButton) {
+    if (percent < 100) {
+      rescanButton.textContent = `${Math.round(percent)}% ${message}`;
+    } else {
+      // Reset button text when complete
+      rescanButton.textContent = 'Rescan';
+    }
+  }
+}
+
+async function performAnalysis(data, width, height, contrastLevel, pixelRadius) {
+  console.log('Using optimized performAnalysis function');
+  
+  // Use the same optimized approach as the main analysis
+  try {
+    // Try WebGL GPU acceleration first (with coordinate fixes)
+    const webglResult = await tryWebGLAnalysis(data, width, height, contrastLevel, pixelRadius);
+    if (webglResult) {
+      return webglResult;
+    }
+  } catch (error) {
+    console.warn('WebGL analysis failed in performAnalysis, falling back to Worker:', error);
+  }
+  
+  // Fallback to Web Worker chunked processing
+  return await runWorkerAnalysis(data, width, height, contrastLevel, pixelRadius);
 }
 
 function applyGreyingEffect(ctx, width, height) {
@@ -349,29 +658,19 @@ function updateCanvasWithResults(ctx, results, width, height) {
   ctx.putImageData(imageData, 0, 0);
 }
 
+// Global luminance cache for performance
+const luminanceCache = new Map();
+
+
 function evaluateColorContrast(r1, g1, b1, r2, g2, b2, contrastLevel) {
-  // Cached luminance values for common colors
-  const luminanceCache = new Map();
-  
-  const getLuminance = (r, g, b) => {
-    const key = (r << 16) | (g << 8) | b;
-    if (luminanceCache.has(key)) {
-      return luminanceCache.get(key);
-    }
-    
-    const [rs, gs, bs] = [r, g, b].map(v => {
-      v /= 255;
-      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-    });
-    
-    const luminance = rs * 0.2126 + gs * 0.7152 + bs * 0.0722;
-    luminanceCache.set(key, luminance);
-    return luminance;
+  // Fast approximation using relative luminance formula
+  const getLuminanceFast = (r, g, b) => {
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   };
   
-  const L1 = getLuminance(r1, g1, b1) + 0.05;
-  const L2 = getLuminance(r2, g2, b2) + 0.05;
-  const ratio = L1 > L2 ? L1 / L2 : L2 / L1;
+  const L1 = getLuminanceFast(r1, g1, b1);
+  const L2 = getLuminanceFast(r2, g2, b2);
+  const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
   
   const requiredRatio = {
     'WCAG-aa-small': 4.5,
@@ -384,22 +683,42 @@ function evaluateColorContrast(r1, g1, b1, r2, g2, b2, contrastLevel) {
 }
 
 async function merged(canvas, ctx) {
+  console.log('=== MERGED FUNCTION DEBUG ===');
+  console.log('Analysis canvas size:', canvas.width, 'x', canvas.height);
+  
+  const capturedImage = document.getElementById('capturedImage');
+  console.log('Captured image size:', capturedImage.naturalWidth, 'x', capturedImage.naturalHeight);
+  console.log('Captured image display size:', capturedImage.offsetWidth, 'x', capturedImage.offsetHeight);
+  
   return new Promise((resolve) => {
     const mergedCanvas = document.createElement('canvas');
     const mergedCtx = mergedCanvas.getContext('2d');
     mergedCanvas.width = canvas.width;
     mergedCanvas.height = canvas.height;
     
-    const capturedImage = document.getElementById('capturedImage');
+    console.log('Merge canvas size:', mergedCanvas.width, 'x', mergedCanvas.height);
+    
+    // Draw captured image as background
     mergedCtx.drawImage(capturedImage, 0, 0, canvas.width, canvas.height);
+    console.log('Drew captured image to merge canvas');
+    
+    // Draw analysis overlay
     mergedCtx.drawImage(canvas, 0, 0);
+    console.log('Drew analysis canvas to merge canvas');
 
     const mergedImageUrl = mergedCanvas.toDataURL('image/png');
     const mergedImg = new Image();
     
     mergedImg.onload = () => {
+      console.log('Merged image loaded, updating analysis canvas');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(mergedImg, 0, 0);
+      console.log('=== MERGE COMPLETE ===');
+      resolve();
+    };
+    
+    mergedImg.onerror = (error) => {
+      console.error('Error loading merged image:', error);
       resolve();
     };
     
@@ -447,9 +766,15 @@ document.getElementById('rescanButton').addEventListener('click', async () => {
     ctx.drawImage(capturedImage, 0, 0, canvas.width, canvas.height);
     
     // Run analysis with current toolbar settings
-    await runColorContrastAnalysis(ctx, canvas.width, canvas.height,true);
+    console.log('=== RESCAN STARTING ===');
+    try {
+      await runColorContrastAnalysis(ctx, canvas.width, canvas.height, true);
+      console.log('=== RESCAN COMPLETE ===');
+    } catch (error) {
+      console.error('Rescan failed:', error);
+    }
     
-    // Reset button state
+    // Always reset button state
     rescanButton.disabled = false;
     maskButton.disabled = false;
     downloadButton.disabled = false;
@@ -484,9 +809,33 @@ document.getElementById('downloadButton').addEventListener('click', () => {
 document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.sync.get({
     wcagLevel: 'WCAG-aa-small',
-    pixelRadius: '1'
+    pixelRadius: '3',
+    useWebGL: true
   }, (settings) => {
     document.getElementById('levelEvaluated-options').value = settings.wcagLevel;
     document.getElementById('pixelRadius-options').value = settings.pixelRadius;
+    document.getElementById('useWebGL-options').checked = settings.useWebGL;
+    
+    // Check WebGL availability and update status
+    checkWebGLAvailabilityToolbar();
   });
 });
+
+// Check WebGL availability for toolbar
+function checkWebGLAvailabilityToolbar() {
+  const canvas = document.createElement('canvas');
+  const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+  const webglStatus = document.getElementById('webglStatusToolbar');
+  const useWebGLCheckbox = document.getElementById('useWebGL-options');
+  
+  if (gl) {
+    webglStatus.textContent = 'GPU available';
+    webglStatus.className = 'webgl-status-small available';
+    useWebGLCheckbox.disabled = false;
+  } else {
+    webglStatus.textContent = 'GPU unavailable';
+    webglStatus.className = 'webgl-status-small unavailable';
+    useWebGLCheckbox.disabled = true;
+    useWebGLCheckbox.checked = false;
+  }
+}
