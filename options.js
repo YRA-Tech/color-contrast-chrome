@@ -1,8 +1,9 @@
 // Default settings
 const DEFAULT_SETTINGS = {
-  wcagLevel: 'WCAG-aa-small',
+  wcagLevel: 'WCAG-aa-large',
   pixelRadius: '3',
-  useWebGL: true
+  useWebGL: true,
+  captureMode: 'hardware'
 };
 
 // Keep track of the current settings in memory
@@ -13,7 +14,8 @@ function saveSettings() {
   const settings = {
     wcagLevel: document.querySelector('input[name="wcagLevel"]:checked').value,
     pixelRadius: document.getElementById('pixelRadius').value,
-    useWebGL: document.getElementById('useWebGL').checked
+    useWebGL: document.getElementById('useWebGL').checked,
+    captureMode: document.querySelector('input[name="captureMode"]:checked').value
   };
 
   chrome.storage.sync.set(settings, () => {
@@ -55,6 +57,12 @@ function loadSettings() {
       useWebGL.checked = settings.useWebGL;
     }
 
+    // Set capture mode
+    const captureModeRadio = document.querySelector(`input[name="captureMode"][value="${settings.captureMode}"]`);
+    if (captureModeRadio) {
+      captureModeRadio.checked = true;
+    }
+
     // Check WebGL availability and update status
     checkWebGLAvailability();
   });
@@ -75,6 +83,11 @@ function restoreSettings() {
   const useWebGL = document.getElementById('useWebGL');
   if (useWebGL) {
     useWebGL.checked = currentSettings.useWebGL;
+  }
+
+  const captureModeRadio = document.querySelector(`input[name="captureMode"][value="${currentSettings.captureMode}"]`);
+  if (captureModeRadio) {
+    captureModeRadio.checked = true;
   }
 }
 

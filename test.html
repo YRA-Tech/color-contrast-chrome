@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Color Contrast Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: white;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ccc;
+        }
+        .low-contrast {
+            background: #f0f0f0;
+            color: #ccc;
+            padding: 10px;
+        }
+        .good-contrast {
+            background: white;
+            color: #333;
+            padding: 10px;
+        }
+        .high-contrast {
+            background: black;
+            color: white;
+            padding: 10px;
+        }
+        .mixed-colors {
+            background: linear-gradient(45deg, #ff0000, #00ff00, #0000ff);
+            color: white;
+            padding: 20px;
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body>
+    <h1>Color Contrast Test Page</h1>
+    <p>This page contains various contrast scenarios for testing the extension.</p>
+    
+    <div class="test-section">
+        <h2>Low Contrast (Should be flagged)</h2>
+        <div class="low-contrast">
+            This text has poor contrast and should be highlighted by the analyzer.
+            Light gray text on light gray background.
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Good Contrast (Should pass)</h2>
+        <div class="good-contrast">
+            This text has good contrast and should not be flagged.
+            Dark gray text on white background.
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>High Contrast (Should pass)</h2>
+        <div class="high-contrast">
+            This text has high contrast and should definitely pass.
+            White text on black background.
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Mixed Colors (Complex scenario)</h2>
+        <div class="mixed-colors">
+            This section has a gradient background with white text and text shadow.
+            Different parts may have different contrast ratios.
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Instructions</h2>
+        <ol>
+            <li>Open the extension popup</li>
+            <li>Try "Capture Visible Tab" in both Hardware and CSS pixel modes</li>
+            <li>Try "Capture Whole Page" in both modes</li>
+            <li>Try "Capture Selected Area" on different sections</li>
+            <li>Verify the rescan function works with different settings</li>
+            <li>Check that low contrast areas are properly highlighted</li>
+        </ol>
+    </div>
+</body>
+</html>

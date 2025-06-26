@@ -1,4 +1,4 @@
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener(async (message) => {
   if (message.image) {
     const img = document.getElementById('capturedImage');
     const analysisCanvas = document.getElementById('analysisCanvas');
@@ -15,24 +15,41 @@ chrome.runtime.onMessage.addListener((message) => {
     rescanButton.textContent = 'Initial Scan...';
     maskButton.textContent = 'Mask Loading...';
 
-    img.onload = () => {
+    img.onload = async () => {
       console.log('=== IMAGE LOADED ===');
       console.log('Image src length:', message.image.length);
       console.log('Image loaded - Natural size:', img.naturalWidth, 'x', img.naturalHeight);
       
       img.style.display = 'block';
       
+      // Get capture mode from message (preferred) or settings (fallback)
+      let captureMode = message.captureMode;
+      if (!captureMode) {
+        const settings = await new Promise(resolve => {
+          chrome.storage.sync.get({
+            captureMode: 'hardware'
+          }, resolve);
+        });
+        captureMode = settings.captureMode;
+      }
+      
       setTimeout(() => {
         console.log('After display - Image rendered size:', img.offsetWidth, 'x', img.offsetHeight);
-        requestAnimationFrame(() => {
-          initializeAnalysis(img, analysisCanvas, message).then(() => {
-            
-            rescanButton.disabled = false;
-            maskButton.disabled = false;
-            downloadButton.disabled = false;
-            rescanButton.textContent = 'Rescan';
-            maskButton.textContent = 'Hide Mask';
-          });
+        console.log('Capture mode:', captureMode);
+        
+        requestAnimationFrame(async () => {
+          // Choose initialization method based on capture mode
+          if (captureMode === 'css') {
+            await initializeAnalysisWithCSSPixels(img, analysisCanvas, message);
+          } else {
+            await initializeAnalysis(img, analysisCanvas, message);
+          }
+          
+          rescanButton.disabled = false;
+          maskButton.disabled = false;
+          downloadButton.disabled = false;
+          rescanButton.textContent = 'Rescan';
+          maskButton.textContent = 'Hide Mask';
         });
       }, 100);
     };
@@ -52,18 +69,13 @@ async function initializeAnalysis(img, analysisCanvas, message) {
   }
 
   let imageWidth, imageHeight;
-  if (message.mode === 'full') {
-    imageWidth = img.naturalWidth / devicePixelRatio;
-    imageHeight = img.naturalHeight / devicePixelRatio;
-  } else if (message.mode === 'whole') {
-    // For whole page capture, use natural dimensions directly
-    imageWidth = img.naturalWidth;
-    imageHeight = img.naturalHeight;
-    console.log('Whole page mode - using natural dimensions directly');
-  } else {
-    imageWidth = img.naturalWidth;
-    imageHeight = img.naturalHeight;
-  }
+  
+  // For hardware pixel mode, always use natural dimensions
+  // For CSS pixel mode, the scaling is handled in the capture process
+  imageWidth = img.naturalWidth;
+  imageHeight = img.naturalHeight;
+  
+  console.log('Using natural image dimensions for all modes');
   
   // Console logging for size comparison
   console.log('=== IMAGE SIZE ANALYSIS ===');
@@ -78,6 +90,11 @@ async function initializeAnalysis(img, analysisCanvas, message) {
   webglCanvas.height = imageHeight;
   analysisCanvas.width = imageWidth;
   analysisCanvas.height = imageHeight;
+  
+  // Set canvas display size to match the actual displayed image size
+  // This preserves the natural aspect ratio and size for hardware pixel mode
+  analysisCanvas.style.width = img.offsetWidth + 'px';
+  analysisCanvas.style.height = img.offsetHeight + 'px';
   
   console.log('WebGL Canvas Size:', webglCanvas.width, 'x', webglCanvas.height);
   console.log('Analysis Canvas Size:', analysisCanvas.width, 'x', analysisCanvas.height);
@@ -184,32 +201,36 @@ async function initializeAnalysis(img, analysisCanvas, message) {
 }
 
 async function runColorContrastAnalysis(ctx, width, height, useToolbarSettings = false) {
-  let contrastLevel, pixelRadius, useWebGL;
+  let contrastLevel, pixelRadius, useWebGL, captureMode;
   if(useToolbarSettings) {
     const wcagLevelSelect = document.getElementById('levelEvaluated-options');
     const pixelRadiusSelect = document.getElementById('pixelRadius-options');
     const useWebGLCheckbox = document.getElementById('useWebGL-options');
+    const captureModeRadio = document.querySelector('input[name="captureMode-options"]:checked');
     contrastLevel = wcagLevelSelect.value;
     pixelRadius = parseInt(pixelRadiusSelect.value, 10);
     useWebGL = useWebGLCheckbox.checked;
+    captureMode = captureModeRadio ? captureModeRadio.value : 'hardware';
   } else {
     const settings = await new Promise(resolve => {
       chrome.storage.sync.get({
         wcagLevel: 'WCAG-aa-small',
         pixelRadius: '3',
-        useWebGL: true
+        useWebGL: true,
+        captureMode: 'hardware'
       }, resolve);
     });
     contrastLevel = settings.wcagLevel;
     pixelRadius = parseInt(settings.pixelRadius, 10);
     useWebGL = settings.useWebGL;
+    captureMode = settings.captureMode;
   }
 
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
   console.log('=== OPTIMIZED COLOR CONTRAST ANALYSIS START ===');
-  console.log('Analysis settings:', { contrastLevel, pixelRadius, width, height, useWebGL });
+  console.log('Analysis settings:', { contrastLevel, pixelRadius, width, height, useWebGL, captureMode });
   
   // Check user preference for WebGL
   if (useWebGL) {
@@ -240,6 +261,45 @@ async function runColorContrastAnalysis(ctx, width, height, useToolbarSettings =
   updateAnalysisProgress('Complete', 100);
   
   return merged(document.getElementById('analysisCanvas'), ctx);
+}
+
+// CSS Pixel capture using viewport manipulation
+async function initializeAnalysisWithCSSPixels(img, analysisCanvas, message) {
+  console.log('=== CSS PIXEL CAPTURE MODE ===');
+  
+  // For CSS pixel mode, we need to handle scaling differently
+  const ctx = analysisCanvas.getContext('2d', { willReadFrequently: true });
+  
+  // Use the image dimensions directly (ignore devicePixelRatio scaling)
+  const imageWidth = img.naturalWidth;
+  const imageHeight = img.naturalHeight;
+  
+  console.log('CSS Mode - Image dimensions:', imageWidth, 'x', imageHeight);
+  console.log('Original devicePixelRatio would have been:', message.devicePixelRatio || 1);
+  
+  // Set canvas to CSS pixel dimensions (1:1 mapping)
+  analysisCanvas.width = imageWidth;
+  analysisCanvas.height = imageHeight;
+  
+  // Set canvas display size to match the actual displayed image size
+  analysisCanvas.style.width = img.offsetWidth + 'px';
+  analysisCanvas.style.height = img.offsetHeight + 'px';
+  
+  console.log('CSS Mode - Canvas set to:', analysisCanvas.width, 'x', analysisCanvas.height);
+  
+  // Clear and draw image at 1:1 CSS pixel ratio
+  ctx.clearRect(0, 0, analysisCanvas.width, analysisCanvas.height);
+  ctx.drawImage(img, 0, 0, imageWidth, imageHeight);
+  
+  console.log('CSS Mode - Image drawn without hardware scaling');
+  
+  // Run analysis on CSS pixel data
+  await runColorContrastAnalysis(ctx, analysisCanvas.width, analysisCanvas.height, false);
+  
+  // Switch to analysis canvas
+  analysisCanvas.style.display = 'block';
+  
+  console.log('=== CSS PIXEL CAPTURE COMPLETE ===');
 }
 
 // WebGL GPU-accelerated analysis
@@ -276,7 +336,12 @@ async function tryWebGLAnalysis(data, width, height, contrastLevel, pixelRadius)
     out vec4 fragColor;
     
     float getLuminance(vec3 color) {
-      return 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+      // Convert sRGB to linear RGB
+      vec3 linearRGB = mix(color / 12.92, pow((color + 0.055) / 1.055, vec3(2.4)), 
+                          step(vec3(0.03928), color));
+      
+      // WCAG 2.1 luminance formula
+      return 0.2126 * linearRGB.r + 0.7152 * linearRGB.g + 0.0722 * linearRGB.b;
     }
     
     float getContrast(float l1, float l2) {
@@ -448,7 +513,20 @@ async function runWorkerAnalysis(data, width, height, contrastLevel, pixelRadius
           const { data, width, height, startY, endY, contrastLevel, pixelRadius } = e.data;
           
           function evaluateColorContrast(r1, g1, b1, r2, g2, b2, level) {
-            const getLuminance = (r, g, b) => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            const getLuminance = (r, g, b) => {
+              // Convert sRGB to linear RGB
+              const toLinear = (c) => {
+                c = c / 255;
+                return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+              };
+              
+              const rLin = toLinear(r);
+              const gLin = toLinear(g);
+              const bLin = toLinear(b);
+              
+              // WCAG 2.1 luminance formula
+              return 0.2126 * rLin + 0.7152 * gLin + 0.0722 * bLin;
+            };
             const L1 = getLuminance(r1, g1, b1);
             const L2 = getLuminance(r2, g2, b2);
             const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
@@ -663,13 +741,24 @@ const luminanceCache = new Map();
 
 
 function evaluateColorContrast(r1, g1, b1, r2, g2, b2, contrastLevel) {
-  // Fast approximation using relative luminance formula
-  const getLuminanceFast = (r, g, b) => {
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  // Proper WCAG 2.1 relative luminance calculation
+  const getLuminance = (r, g, b) => {
+    // Convert sRGB to linear RGB
+    const toLinear = (c) => {
+      c = c / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    
+    const rLin = toLinear(r);
+    const gLin = toLinear(g);
+    const bLin = toLinear(b);
+    
+    // WCAG 2.1 luminance formula
+    return 0.2126 * rLin + 0.7152 * gLin + 0.0722 * bLin;
   };
   
-  const L1 = getLuminanceFast(r1, g1, b1);
-  const L2 = getLuminanceFast(r2, g2, b2);
+  const L1 = getLuminance(r1, g1, b1);
+  const L2 = getLuminance(r2, g2, b2);
   const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
   
   const requiredRatio = {
@@ -767,7 +856,23 @@ document.getElementById('rescanButton').addEventListener('click', async () => {
     
     // Run analysis with current toolbar settings
     console.log('=== RESCAN STARTING ===');
+    
+    // Get current capture mode from toolbar
+    const captureModeRadio = document.querySelector('input[name="captureMode-options"]:checked');
+    const currentCaptureMode = captureModeRadio ? captureModeRadio.value : 'hardware';
+    console.log('Rescan capture mode:', currentCaptureMode);
+    
     try {
+      if (currentCaptureMode === 'css') {
+        // For CSS mode, redraw the image without hardware scaling
+        const capturedImage = document.getElementById('capturedImage');
+        if (capturedImage) {
+          console.log('Rescan: Redrawing image for CSS pixel mode');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(capturedImage, 0, 0, canvas.width, canvas.height);
+        }
+      }
+      
       await runColorContrastAnalysis(ctx, canvas.width, canvas.height, true);
       console.log('=== RESCAN COMPLETE ===');
     } catch (error) {
@@ -810,14 +915,24 @@ document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.sync.get({
     wcagLevel: 'WCAG-aa-small',
     pixelRadius: '3',
-    useWebGL: true
+    useWebGL: true,
+    captureMode: 'hardware'
   }, (settings) => {
     document.getElementById('levelEvaluated-options').value = settings.wcagLevel;
     document.getElementById('pixelRadius-options').value = settings.pixelRadius;
     document.getElementById('useWebGL-options').checked = settings.useWebGL;
     
+    // Set capture mode
+    const captureModeRadio = document.querySelector(`input[name="captureMode-options"][value="${settings.captureMode}"]`);
+    if (captureModeRadio) {
+      captureModeRadio.checked = true;
+    }
+    
     // Check WebGL availability and update status
     checkWebGLAvailabilityToolbar();
+    
+    // Update capture mode status
+    updateCaptureModeStatus(settings.captureMode);
   });
 });
 
@@ -839,3 +954,27 @@ function checkWebGLAvailabilityToolbar() {
     useWebGLCheckbox.checked = false;
   }
 }
+
+// Update capture mode status indicator
+function updateCaptureModeStatus(mode) {
+  const statusElement = document.getElementById('captureModeStatus');
+  if (statusElement) {
+    if (mode === 'css') {
+      statusElement.textContent = 'Design intent colors';
+      statusElement.className = 'capture-mode-status css-mode';
+    } else {
+      statusElement.textContent = 'Visual appearance';
+      statusElement.className = 'capture-mode-status hardware-mode';
+    }
+  }
+}
+
+// Add event listener for capture mode changes
+document.addEventListener('DOMContentLoaded', () => {
+  const captureModeRadios = document.querySelectorAll('input[name="captureMode-options"]');
+  captureModeRadios.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      updateCaptureModeStatus(e.target.value);
+    });
+  });
+});

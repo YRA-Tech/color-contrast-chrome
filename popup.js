@@ -10,7 +10,6 @@ const SPECIAL_PAGES = [
   'chrome-extension://*',
   'edge://*',
   'about:*',
-  'file://*',
   'view-source:*'
 ];
 
@@ -140,13 +139,23 @@ document.getElementById('captureFull').addEventListener('click', () => {
   log('Full capture button clicked');
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0] && !isSpecialPage(tabs[0].url) && !isRestrictedDomain(tabs[0].url)) {
-      chrome.runtime.sendMessage({ 
-        action: 'captureFullScreen', 
-        mode: 'full',
-        devicePixelRatio: window.devicePixelRatio 
+      // Get capture mode from storage
+      chrome.storage.sync.get({ captureMode: 'hardware' }, (settings) => {
+        log(`Sending captureFullScreen message with mode: ${settings.captureMode}`);
+        chrome.runtime.sendMessage({ 
+          action: 'captureFullScreen', 
+          mode: 'full',
+          devicePixelRatio: window.devicePixelRatio,
+          captureMode: settings.captureMode
+        }, (response) => {
+          log(`Response from background: ${JSON.stringify(response)}`);
+          if (chrome.runtime.lastError) {
+            log(`Error: ${chrome.runtime.lastError.message}`);
+          }
+          // Auto-dismiss popup after starting capture
+          setTimeout(() => window.close(), 100);
+        });
       });
-      // Auto-dismiss popup after starting capture
-      window.close();
     }
   });
 });
@@ -155,9 +164,16 @@ document.getElementById('captureArea').addEventListener('click', () => {
   log('Area capture button clicked');
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0] && !isSpecialPage(tabs[0].url) && !isRestrictedDomain(tabs[0].url)) {
-      chrome.runtime.sendMessage({ action: 'captureScreen', mode: 'selected' });
-      // Auto-dismiss popup after starting capture
-      window.close();
+      // Get capture mode from storage
+      chrome.storage.sync.get({ captureMode: 'hardware' }, (settings) => {
+        chrome.runtime.sendMessage({ 
+          action: 'captureScreen', 
+          mode: 'selected',
+          captureMode: settings.captureMode
+        });
+        // Auto-dismiss popup after starting capture
+        window.close();
+      });
     }
   });
 });
@@ -166,13 +182,23 @@ document.getElementById('captureWhole').addEventListener('click', () => {
   log('Whole page capture button clicked');
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0] && !isSpecialPage(tabs[0].url) && !isRestrictedDomain(tabs[0].url)) {
-      chrome.runtime.sendMessage({ 
-        action: 'captureWholePage', 
-        mode: 'whole',
-        devicePixelRatio: window.devicePixelRatio 
+      // Get capture mode from storage
+      chrome.storage.sync.get({ captureMode: 'hardware' }, (settings) => {
+        log(`Sending captureWholePage message with mode: ${settings.captureMode}`);
+        chrome.runtime.sendMessage({ 
+          action: 'captureWholePage', 
+          mode: 'whole',
+          devicePixelRatio: window.devicePixelRatio,
+          captureMode: settings.captureMode
+        }, (response) => {
+          log(`Response from background: ${JSON.stringify(response)}`);
+          if (chrome.runtime.lastError) {
+            log(`Error: ${chrome.runtime.lastError.message}`);
+          }
+          // Auto-dismiss popup after starting capture
+          setTimeout(() => window.close(), 100);
+        });
       });
-      // Auto-dismiss popup after starting capture
-      window.close();
     }
   });
 });
@@ -187,11 +213,14 @@ document.getElementById('captureDesktop').addEventListener('click', () => {
   // Get devicePixelRatio from the popup window context
   const ratio = window.devicePixelRatio || 1;
 
-  chrome.runtime.sendMessage({ 
-    action: 'captureDesktop',
-    mode: 'desktop',
-    devicePixelRatio: ratio
-  }, (response) => {
+  // Get capture mode from storage
+  chrome.storage.sync.get({ captureMode: 'hardware' }, (settings) => {
+    chrome.runtime.sendMessage({ 
+      action: 'captureDesktop',
+      mode: 'desktop',
+      devicePixelRatio: ratio,
+      captureMode: settings.captureMode
+    }, (response) => {
     log(`Received response from background: ${JSON.stringify(response)}`);
     if (chrome.runtime.lastError) {
       log(`Error: ${chrome.runtime.lastError.message}`);
@@ -202,6 +231,7 @@ document.getElementById('captureDesktop').addEventListener('click', () => {
       // Auto-dismiss popup after successful desktop capture initiation
       window.close();
     }
+    });
   });
 });
 

@@ -4,6 +4,7 @@
   let instructionBox = null;
   let initialScrollY;
   let isSelecting = false;
+  let captureMode = 'hardware';
 
   function createInstructionBox() {
     instructionBox = document.createElement('div');
@@ -69,6 +70,7 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'startSelection') {
       isSelecting = true;
+      captureMode = message.captureMode || 'hardware';
       document.body.style.cursor = 'crosshair';
       createInstructionBox();
       document.addEventListener('mousedown', onMouseDown, true);
@@ -118,7 +120,8 @@
           height: height,
           devicePixelRatio: window.devicePixelRatio,
           mode: 'selected'
-        }
+        },
+        captureMode: captureMode
       });
       
       event.preventDefault();

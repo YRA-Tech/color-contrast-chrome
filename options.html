@@ -121,6 +121,29 @@
       border: 1px solid #fecaca;
     }
 
+    .capture-mode-info {
+      margin-top: 12px;
+      padding: 12px;
+      background-color: #f8f9fa;
+      border-radius: 6px;
+      border: 1px solid #e9ecef;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .capture-mode-info p {
+      margin: 0 0 8px 0;
+      color: #495057;
+    }
+
+    .capture-mode-info p:last-child {
+      margin-bottom: 0;
+    }
+
+    .capture-mode-info strong {
+      color: #212529;
+    }
+
     @media (max-width: 600px) {
       .container {
         padding: 20px;
@@ -181,6 +204,24 @@
           <input type="checkbox" id="useWebGL" name="useWebGL">
           <label for="useWebGL">Use GPU acceleration (WebGL) when available</label>
           <div id="webglStatus" class="webgl-status"></div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="section">
+      <fieldset>
+        <legend class="section-title">Capture Mode:</legend>
+        <div class="option">
+          <input type="radio" id="hardwarePixels" name="captureMode" value="hardware">
+          <label for="hardwarePixels">Hardware Pixels (actual visual appearance with scaling)</label>
+        </div>
+        <div class="option">
+          <input type="radio" id="cssPixels" name="captureMode" value="css">
+          <label for="cssPixels">CSS Pixels (design intent without hardware scaling)</label>
+        </div>
+        <div class="capture-mode-info">
+          <p><strong>Hardware Pixels:</strong> Captures what users actually see, including antialiasing, scaling artifacts, and visual effects.</p>
+          <p><strong>CSS Pixels:</strong> Captures design intent colors without hardware rendering effects, useful for validating CSS contrast ratios.</p>
         </div>
       </fieldset>
     </div>

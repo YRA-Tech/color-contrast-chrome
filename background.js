@@ -8,17 +8,104 @@ function debounce(func, wait) {
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-function captureTab(callback) {
-  chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
-    if (chrome.runtime.lastError) {
-      console.error('Error capturing tab:', chrome.runtime.lastError.message);
-      return;
-    }
-    callback(dataUrl);
-  });
+function captureTab(callback, captureMode = 'hardware') {
+  if (captureMode === 'css') {
+    console.log('CSS pixel capture mode - using modified capture approach');
+    // For CSS pixel mode, we'll capture at a normalized scale
+    captureCSSPixelTab(callback);
+  } else {
+    chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error capturing tab:', chrome.runtime.lastError.message);
+        return;
+      }
+      callback(dataUrl);
+    });
+  }
 }
 
-async function captureWholePage(callback) {
+async function captureCSSPixelTab(callback) {
+  try {
+    // Get current tab
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs[0];
+    
+    if (!activeTab?.id) {
+      console.error('No active tab found for CSS capture');
+      return;
+    }
+
+    // Get current devicePixelRatio
+    const devicePixelRatio = await chrome.scripting.executeScript({
+      target: { tabId: activeTab.id },
+      func: () => window.devicePixelRatio || 1
+    }).then(results => results[0].result);
+
+    console.log('CSS capture - devicePixelRatio:', devicePixelRatio);
+
+    // Capture at hardware pixel resolution first
+    chrome.tabs.captureVisibleTab(null, { format: 'png' }, async (dataUrl) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error capturing CSS pixel tab:', chrome.runtime.lastError.message);
+        return;
+      }
+
+      // Post-process to scale down to CSS pixels (similar to Playwright's approach)
+      if (devicePixelRatio !== 1) {
+        try {
+          // Get viewport dimensions in CSS pixels
+          const viewport = await chrome.scripting.executeScript({
+            target: { tabId: activeTab.id },
+            func: () => ({
+              width: window.innerWidth,
+              height: window.innerHeight
+            })
+          }).then(results => results[0].result);
+
+          // Create an OffscreenCanvas to scale the image down to CSS pixels
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
+          const imageBitmap = await createImageBitmap(blob);
+          
+          // Create CSS pixel-sized canvas (what Playwright would call 'css' mode)
+          const cssCanvas = new OffscreenCanvas(viewport.width, viewport.height);
+          const cssCtx = cssCanvas.getContext('2d');
+          
+          // Draw the hardware pixel image scaled down to CSS pixel dimensions
+          cssCtx.drawImage(
+            imageBitmap, 
+            0, 0, imageBitmap.width, imageBitmap.height,
+            0, 0, viewport.width, viewport.height
+          );
+          
+          // Convert back to data URL
+          const cssBlob = await cssCanvas.convertToBlob({ type: 'image/png' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            console.log('CSS pixel scaling completed - scaled from', imageBitmap.width, 'x', imageBitmap.height, 'to', viewport.width, 'x', viewport.height);
+            callback(reader.result);
+          };
+          reader.readAsDataURL(cssBlob);
+          
+        } catch (error) {
+          console.error('CSS pixel scaling failed:', error);
+          // Fallback to original hardware pixel image
+          callback(dataUrl);
+        }
+      } else {
+        // No scaling needed if devicePixelRatio is 1
+        callback(dataUrl);
+      }
+    });
+
+  } catch (error) {
+    console.error('CSS pixel capture failed:', error);
+    // Fallback to regular capture
+    chrome.tabs.captureVisibleTab(null, { format: 'png' }, callback);
+  }
+}
+
+async function captureWholePage(callback, captureMode = 'hardware') {
   chrome.tabs.query({ active: true, currentWindow: true }, async function (tabs) {
     if (!tabs[0]?.id) {
       console.error('No active tab found');
@@ -31,6 +118,8 @@ async function captureWholePage(callback) {
         target: { tabId: tabs[0].id },
         func: () => window.devicePixelRatio || 1
       }).then(results => results[0].result);
+
+      // Note: For CSS pixel mode, we'll post-process the final image instead of DOM manipulation
 
       // Save original scroll position and styles
       const initialState = await chrome.scripting.executeScript({
@@ -350,11 +439,39 @@ async function captureWholePage(callback) {
 
       // Convert final scaled canvas to blob and return
       console.log('Converting final canvas for analysis...');
-      finalCanvas.convertToBlob().then(blob => {
-        const reader = new FileReader();
-        reader.onloadend = () => callback(reader.result);
-        reader.readAsDataURL(blob);
-      });
+      
+      if (captureMode === 'css' && devicePixelRatio !== 1) {
+        console.log('Post-processing whole page for CSS pixel mode');
+        // Create CSS pixel-sized canvas (scaled down by devicePixelRatio)
+        const cssCanvas = new OffscreenCanvas(
+          Math.round(dimensions.width / devicePixelRatio),
+          Math.round(dimensions.height / devicePixelRatio)
+        );
+        const cssCtx = cssCanvas.getContext('2d');
+        
+        // Draw the final canvas scaled down to CSS pixel dimensions
+        cssCtx.drawImage(
+          finalCanvas,
+          0, 0, finalCanvas.width, finalCanvas.height,
+          0, 0, cssCanvas.width, cssCanvas.height
+        );
+        
+        cssCanvas.convertToBlob().then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            console.log('CSS pixel whole page scaling completed - scaled from', finalCanvas.width, 'x', finalCanvas.height, 'to', cssCanvas.width, 'x', cssCanvas.height);
+            callback(reader.result);
+          };
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        // Hardware pixel mode or devicePixelRatio is 1
+        finalCanvas.convertToBlob().then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => callback(reader.result);
+          reader.readAsDataURL(blob);
+        });
+      }
 
     } catch (error) {
       console.error('Capture failed:', error);
@@ -363,7 +480,7 @@ async function captureWholePage(callback) {
   });
 }
 
-async function captureDesktop(devicePixelRatio, sendResponse) {
+async function captureDesktop(devicePixelRatio, captureMode, sendResponse) {
   console.log('[Background] Starting desktop capture');
   
   try {
@@ -466,7 +583,8 @@ async function captureDesktop(devicePixelRatio, sendResponse) {
                   chrome.tabs.sendMessage(newTab.id, {
                     image: results[0].result,
                     mode: 'desktop',
-                    devicePixelRatio: devicePixelRatio
+                    devicePixelRatio: devicePixelRatio,
+                    captureMode: captureMode || 'hardware'
                   });
                   chrome.tabs.onUpdated.removeListener(listener);
                 }
@@ -498,7 +616,11 @@ const debouncedCaptureTab = debounce(captureTab, 500);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {   
   if (message.action === 'captureWholePage') {
-    console.log('Starting whole page capture...');
+    const captureMode = message.captureMode || 'hardware';
+    console.log('Starting whole page capture with mode:', captureMode);
+    
+    sendResponse({ success: true, message: 'Capture initiated' });
+    
     captureWholePage((dataUrl) => {
       if (!dataUrl) {
         console.error('Failed to capture page - no data URL returned');
@@ -519,7 +641,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               chrome.tabs.sendMessage(newTab.id, { 
                 image: dataUrl, 
                 mode: 'whole',
-                devicePixelRatio: devicePixelRatio
+                devicePixelRatio: devicePixelRatio,
+                captureMode: captureMode
               });
               chrome.tabs.onUpdated.removeListener(listener);
             }
@@ -527,24 +650,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           chrome.tabs.onUpdated.addListener(listener);
         });
       });
-    });
+    }, captureMode);
+    
+    return true;
   }
   else if (message.action === 'captureFullScreen') {
-    debouncedCaptureTab((dataUrl) => {
+    const captureMode = message.captureMode || 'hardware';
+    console.log('Full screen capture with mode:', captureMode);
+    
+    sendResponse({ success: true, message: 'Capture initiated' });
+    
+    captureTab((dataUrl) => {
       chrome.tabs.create({ url: chrome.runtime.getURL('capture.html') }, (newTab) => {
         const listener = (tabId, changeInfo) => {
           if (tabId === newTab.id && changeInfo.status === 'complete') {
             chrome.tabs.sendMessage(newTab.id, { 
               image: dataUrl, 
               devicePixelRatio: message.devicePixelRatio, 
-              mode: message.mode 
+              mode: message.mode,
+              captureMode: captureMode
             });
             chrome.tabs.onUpdated.removeListener(listener);
           }
         };
         chrome.tabs.onUpdated.addListener(listener);
       });
-    });
+    }, captureMode);
+    
+    return true;
   } 
   else if (message.action === 'captureScreen') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -559,7 +692,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         chrome.tabs.sendMessage(tabs[0].id, { 
           action: 'startSelection', 
-          mode: message.mode 
+          mode: message.mode,
+          captureMode: message.captureMode || 'hardware'
         }, (response) => {
           if (chrome.runtime.lastError) {
             console.error('Error sending message to tab:', chrome.runtime.lastError.message);
@@ -574,8 +708,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } 
   else if (message.action === 'selectionMade') {
     const { x, y, width, height, devicePixelRatio, mode } = message.area;
+    const captureMode = message.captureMode || 'hardware';
 
-    debouncedCaptureTab((dataUrl) => {
+    captureTab((dataUrl) => {
       fetch(dataUrl)
         .then(response => response.blob())
         .then(blob => createImageBitmap(blob))
@@ -632,7 +767,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (tabId === newTab.id && changeInfo.status === 'complete') {
                   chrome.tabs.sendMessage(newTab.id, { 
                     image: croppedDataUrl, 
-                    mode: mode 
+                    mode: mode,
+                    captureMode: captureMode
                   });
                   chrome.tabs.onUpdated.removeListener(listener);
                 }
@@ -646,7 +782,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
   }
   else if (message.action === 'captureDesktop') {
-    captureDesktop(message.devicePixelRatio, sendResponse);
+    captureDesktop(message.devicePixelRatio, message.captureMode, sendResponse);
     return true;
   }
 });
