@@ -201,29 +201,25 @@ async function initializeAnalysis(img, analysisCanvas, message) {
 }
 
 async function runColorContrastAnalysis(ctx, width, height, useToolbarSettings = false) {
-  let contrastLevel, pixelRadius, useWebGL, captureMode;
+  let contrastLevel, pixelRadius, useWebGL;
   if(useToolbarSettings) {
     const wcagLevelSelect = document.getElementById('levelEvaluated-options');
     const pixelRadiusSelect = document.getElementById('pixelRadius-options');
     const useWebGLCheckbox = document.getElementById('useWebGL-options');
-    const captureModeRadio = document.querySelector('input[name="captureMode-options"]:checked');
     contrastLevel = wcagLevelSelect.value;
     pixelRadius = parseInt(pixelRadiusSelect.value, 10);
     useWebGL = useWebGLCheckbox.checked;
-    captureMode = captureModeRadio ? captureModeRadio.value : 'hardware';
   } else {
     const settings = await new Promise(resolve => {
       chrome.storage.sync.get({
         wcagLevel: 'WCAG-aa-small',
         pixelRadius: '3',
-        useWebGL: true,
-        captureMode: 'hardware'
+        useWebGL: true
       }, resolve);
     });
     contrastLevel = settings.wcagLevel;
     pixelRadius = parseInt(settings.pixelRadius, 10);
     useWebGL = settings.useWebGL;
-    captureMode = settings.captureMode;
   }
 
   const imageData = ctx.getImageData(0, 0, width, height);
@@ -857,20 +853,13 @@ document.getElementById('rescanButton').addEventListener('click', async () => {
     // Run analysis with current toolbar settings
     console.log('=== RESCAN STARTING ===');
     
-    // Get current capture mode from toolbar
-    const captureModeRadio = document.querySelector('input[name="captureMode-options"]:checked');
-    const currentCaptureMode = captureModeRadio ? captureModeRadio.value : 'hardware';
-    console.log('Rescan capture mode:', currentCaptureMode);
-    
     try {
-      if (currentCaptureMode === 'css') {
-        // For CSS mode, redraw the image without hardware scaling
-        const capturedImage = document.getElementById('capturedImage');
-        if (capturedImage) {
-          console.log('Rescan: Redrawing image for CSS pixel mode');
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(capturedImage, 0, 0, canvas.width, canvas.height);
-        }
+      // Redraw the captured image to reset the canvas
+      const capturedImage = document.getElementById('capturedImage');
+      if (capturedImage) {
+        console.log('Rescan: Redrawing image');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(capturedImage, 0, 0, canvas.width, canvas.height);
       }
       
       await runColorContrastAnalysis(ctx, canvas.width, canvas.height, true);
@@ -922,17 +911,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('pixelRadius-options').value = settings.pixelRadius;
     document.getElementById('useWebGL-options').checked = settings.useWebGL;
     
-    // Set capture mode
-    const captureModeRadio = document.querySelector(`input[name="captureMode-options"][value="${settings.captureMode}"]`);
-    if (captureModeRadio) {
-      captureModeRadio.checked = true;
-    }
-    
     // Check WebGL availability and update status
     checkWebGLAvailabilityToolbar();
-    
-    // Update capture mode status
-    updateCaptureModeStatus(settings.captureMode);
   });
 });
 
@@ -955,26 +935,4 @@ function checkWebGLAvailabilityToolbar() {
   }
 }
 
-// Update capture mode status indicator
-function updateCaptureModeStatus(mode) {
-  const statusElement = document.getElementById('captureModeStatus');
-  if (statusElement) {
-    if (mode === 'css') {
-      statusElement.textContent = 'Design intent colors';
-      statusElement.className = 'capture-mode-status css-mode';
-    } else {
-      statusElement.textContent = 'Visual appearance';
-      statusElement.className = 'capture-mode-status hardware-mode';
-    }
-  }
-}
 
-// Add event listener for capture mode changes
-document.addEventListener('DOMContentLoaded', () => {
-  const captureModeRadios = document.querySelectorAll('input[name="captureMode-options"]');
-  captureModeRadios.forEach(radio => {
-    radio.addEventListener('change', (e) => {
-      updateCaptureModeStatus(e.target.value);
-    });
-  });
-});

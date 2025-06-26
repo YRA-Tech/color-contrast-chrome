@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Color Contrast Analysis</title>
     <style>
@@ -162,58 +162,6 @@
             color: #f87171;
         }
         
-        .capture-mode-group {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-            min-width: 160px;
-            flex: 0;
-            position: relative;
-        }
-        
-        .capture-mode-group > label {
-            font-size: 11px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.7);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .radio-group {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-        
-        .radio-group label {
-            font-size: 10px;
-            color: rgba(255, 255, 255, 0.8);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            cursor: pointer;
-        }
-        
-        .capture-radio {
-            width: 12px;
-            height: 12px;
-            cursor: pointer;
-        }
-        
-        .capture-mode-status {
-            font-size: 9px;
-            color: rgba(255, 255, 255, 0.6);
-            line-height: 1.2;
-            margin-top: 2px;
-        }
-        
-        .capture-mode-status.css-mode {
-            color: #60a5fa;
-        }
-        
-        .capture-mode-status.hardware-mode {
-            color: #34d399;
-        }
         
         .image-container {
             position: relative;
@@ -294,20 +242,6 @@
                 <div id="webglStatusToolbar" class="webgl-status-small"></div>
             </div>
 
-            <div class="capture-mode-group">
-                <label>Capture Mode</label>
-                <div class="radio-group">
-                    <label for="hardwareMode-options">
-                        <input type="radio" id="hardwareMode-options" name="captureMode-options" value="hardware" class="capture-radio">
-                        Hardware Pixels
-                    </label>
-                    <label for="cssMode-options">
-                        <input type="radio" id="cssMode-options" name="captureMode-options" value="css" class="capture-radio">
-                        CSS Pixels
-                    </label>
-                </div>
-                <div id="captureModeStatus" class="capture-mode-status"></div>
-            </div>
             
             <button id="maskButton" class="button">Hide Mask</button>
             <button id="rescanButton" class="button">Rescan</button>
