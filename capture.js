@@ -38,11 +38,13 @@ chrome.runtime.onMessage.addListener(async (message) => {
         console.log('Capture mode:', captureMode);
         
         requestAnimationFrame(async () => {
-          // Choose initialization method based on capture mode
-          if (captureMode === 'css') {
-            await initializeAnalysisWithCSSPixels(img, analysisCanvas, message);
-          } else {
+          try {
+            console.log('Starting analysis initialization...');
+            // Use standard initialization - capture mode was handled during capture
             await initializeAnalysis(img, analysisCanvas, message);
+            console.log('Analysis initialization completed');
+          } catch (error) {
+            console.error('Analysis initialization failed:', error);
           }
           
           rescanButton.disabled = false;
@@ -58,6 +60,10 @@ chrome.runtime.onMessage.addListener(async (message) => {
 });
 
 async function initializeAnalysis(img, analysisCanvas, message) {
+  console.log('=== initializeAnalysis STARTED ===');
+  console.log('Image:', img.naturalWidth, 'x', img.naturalHeight);
+  console.log('Message:', message);
+  
   const webglCanvas = document.createElement('canvas');
   const ctx = analysisCanvas.getContext('2d', { willReadFrequently: true });
   const gl = webglCanvas.getContext('webgl', { preserveDrawingBuffer: true });
@@ -67,6 +73,8 @@ async function initializeAnalysis(img, analysisCanvas, message) {
     console.error('WebGL not supported');
     return;
   }
+  
+  console.log('WebGL context created successfully');
 
   let imageWidth, imageHeight;
   
@@ -95,6 +103,10 @@ async function initializeAnalysis(img, analysisCanvas, message) {
   // This preserves the natural aspect ratio and size for hardware pixel mode
   analysisCanvas.style.width = img.offsetWidth + 'px';
   analysisCanvas.style.height = img.offsetHeight + 'px';
+  
+  console.log('Canvas display size set to:', img.offsetWidth, 'x', img.offsetHeight);
+  console.log('Image natural size:', img.naturalWidth, 'x', img.naturalHeight);
+  console.log('Canvas internal size:', analysisCanvas.width, 'x', analysisCanvas.height);
   
   console.log('WebGL Canvas Size:', webglCanvas.width, 'x', webglCanvas.height);
   console.log('Analysis Canvas Size:', analysisCanvas.width, 'x', analysisCanvas.height);
@@ -201,6 +213,10 @@ async function initializeAnalysis(img, analysisCanvas, message) {
 }
 
 async function runColorContrastAnalysis(ctx, width, height, useToolbarSettings = false) {
+  console.log('=== runColorContrastAnalysis STARTED ===');
+  console.log('Canvas size:', width, 'x', height);
+  console.log('useToolbarSettings:', useToolbarSettings);
+  
   let contrastLevel, pixelRadius, useWebGL;
   if(useToolbarSettings) {
     const wcagLevelSelect = document.getElementById('levelEvaluated-options');
@@ -226,7 +242,7 @@ async function runColorContrastAnalysis(ctx, width, height, useToolbarSettings =
   const data = imageData.data;
 
   console.log('=== OPTIMIZED COLOR CONTRAST ANALYSIS START ===');
-  console.log('Analysis settings:', { contrastLevel, pixelRadius, width, height, useWebGL, captureMode });
+  console.log('Analysis settings:', { contrastLevel, pixelRadius, width, height, useWebGL });
   
   // Check user preference for WebGL
   if (useWebGL) {
