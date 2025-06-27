@@ -14,7 +14,7 @@
   padding: 12px 20px;
   border-radius: 6px;
   font-family: system-ui, -apple-system, sans-serif;
-  font-size: 14px;
+  font-size: 1rem;
   pointer-events: none;
 }
 
@@ -27,5 +27,5 @@
 
 .cancel-instruction {
   color: #beaaaa;
-  font-size: 12px;
+  font-size: 1rem;
 }

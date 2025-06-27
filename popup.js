@@ -61,7 +61,7 @@ function toggleWarningMessage(show, isRestricted = false) {
     warningEl.style.padding = '10px';
     warningEl.style.margin = '10px';
     warningEl.style.borderRadius = '4px';
-    warningEl.style.fontSize = '14px';
+    warningEl.style.fontSize = '1rem';
     warningEl.style.textAlign = 'center';
     
     warningEl.innerText = isRestricted ? 
@@ -108,7 +108,7 @@ function showError(message) {
   errorDiv.style.padding = '10px';
   errorDiv.style.margin = '10px';
   errorDiv.style.borderRadius = '4px';
-  errorDiv.style.fontSize = '14px';
+  errorDiv.style.fontSize = '1rem';
   errorDiv.textContent = message;
   
   const container = document.querySelector('.container');
