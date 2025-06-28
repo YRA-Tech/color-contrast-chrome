@@ -8,13 +8,13 @@ Notes on the Code
 Versions
 
 2.0.50
-After chatting with Greg, my team took their original code and
-- removed the parts related to screen capture that were originally from a Google library but are now supported by the browser natively
-- updated it to work with Manifest v3 (with appropriate security settings)
+After chatting with Greg (@gdkraus), my team (Jeff Witt Consulting and employees @Abdul-Rehman-Syed, @SyedSarimMahmood727460, and @umaidshahid) took their original code and
+- removed the parts related to screen capture that were originally from a Google library, but are now supported by the browser natively
+- updated it to work with Manifest v3, with appropriate security permissions settings
 - added support for variable device pixel ratios, including support for browser zoom.  With this addition it should now work with Macs and other computers that have dense displays.
 - With this addition there are now two capture modes -- hardware pixels or CSS pixels. In hardware pixel mode, the analysis image is the same size as the display pixels, which may be larger than what you want if your intention is to paste the image into a report.
-- In CSS pixel mode, the resulting image is supposed to be true to the intended size and may be different that what is originally displayed.
-  The browser doesn't offer a native way to get a screen capture that is always true to the CSS values you'd get if you used a display with 1:1 device pixel ratio, at 100% zoom.
+- In CSS pixel mode, the resulting image is supposed to be true to the intended size and may be different than what is originally displayed.
+  The browser doesn't offer a native way to get a screen capture that is always true to the CSS values that you'd get if you used a display with 1:1 device pixel ratio, at 100% zoom.
   To address this we borrow a scaling technique from playwright.js (see https://playwright.dev/docs/api/class-elementhandle#element-handle-screenshot, https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/crPage.ts)
 
 1.1.2
