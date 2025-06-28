@@ -1,16 +1,21 @@
-This application is covered by two different BSD-licenses. 
+This application is covered by two different BSD-licenses, and the Apache 2.0 license. 
 
-The following files (from versions prior to 2.0) are covered by License A:
+For version 2.0+, a screen capture scaling technique from playwright.js is used for CSS pixel mode.  Playwright (https://github.com/microsoft/playwright) is coverd under Apache 2.0 (2004) license (see https://github.com/microsoft/playwright/blob/main/LICENSE).  
+Playwright contains code derived from the Puppeteer project (https://github.com/puppeteer/puppeteer), also available under the Apache 2.0 license (see https://github.com/puppeteer/puppeteer/blob/master/LICENSE).
+
+
+The following files (from versions prior to 2.0) are covered by License A below:
 
 image-analysis.js
 background-image-analysis.js
 
 (from North Carolina State University) and 
 
+
 Files previously used to facilitate screen capture (largely based on the existing extension "Screen Capture (by Google) -- https://chrome.google.com/webstore/detail/screen-capture-by-google/cpngackimfmofbokmjmljamhdncknpmg/details" were covered by License B (from Google). But these files are no longer used after v2.0.
 
 
-Changes made with version 2.0 and later by Jeff Witt Consulting and/or YRA Tech are Copyright (c) YRA Tech 2025, and are covered by License B.
+Changes made with version 2.0 and later by Jeff Witt Consulting and/or YRA Tech are Copyright (c) YRA Tech 2025, and are covered by License B, the BSD 3-clause license.
 
 
 
