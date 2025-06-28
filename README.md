@@ -1,7 +1,7 @@
 color-contrast-chrome
 Color Contrast Analyzer Extension for Google Chrome
 
-This browser extension was originally written by Greg Krauss during his time at NCSU, so NCSU owns the original copyright (very permissively licensed), but they are no longer maintaining it.
+This browser extension was originally written by Greg Krauss during his time at NCSU, so NCSU owns the original copyright (permissively licensed), but they are no longer maintaining it.
 
 Notes on the Code
 
